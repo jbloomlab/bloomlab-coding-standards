@@ -1,8 +1,8 @@
 # Lab coding standards (master rules)
 
-These rules apply to all lab repositories. Project-level CLAUDE.md files may extend or override them. Rationale and examples: [`bloomlab-code-standards/BEST_PRACTICES.md`](BEST_PRACTICES.md) (consult only when needed). This file is the normative rule set; if the two documents ever disagree, this file wins.
+These rules apply to all lab repositories. Project-level CLAUDE.md files may extend or override them. Rationale and examples: [`bloomlab-coding-standards/BEST_PRACTICES.md`](BEST_PRACTICES.md) (consult only when needed). This file is the normative rule set; if the two documents ever disagree, this file wins.
 
-When the user asks to run the lab review (`/review`, "structural review", "lab review", or similar), follow the instructions in [`bloomlab-code-standards/commands/review.md`](commands/review.md).
+When the user asks to run the lab review (`/review`, "structural review", "lab review", or similar), follow the instructions in [`bloomlab-coding-standards/commands/review.md`](commands/review.md).
 
 ## Repository organization
 

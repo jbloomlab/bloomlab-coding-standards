@@ -1,6 +1,6 @@
-@bloomlab-code-standards/CLAUDE.md
+@bloomlab-coding-standards/CLAUDE.md
 
-- Lab standards are pinned at a commit of the `bloomlab-code-standards` submodule; update periodically with `git submodule update --remote bloomlab-code-standards` (see [that repo's README](bloomlab-code-standards/README.md), "Updating the standards submodule in your project").
+- Lab standards are pinned at a commit of the `bloomlab-coding-standards` submodule; update periodically with `git submodule update --remote bloomlab-coding-standards` (see [that repo's README](bloomlab-coding-standards/README.md), "Updating the standards submodule in your project").
 
 <if this project includes a lab pipeline as a submodule, point at its conventions here, e.g.: **Also read `seqneut-pipeline/CLAUDE.md`**, whose conventions apply to work in this repository as well.>
 

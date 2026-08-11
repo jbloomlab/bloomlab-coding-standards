@@ -1,14 +1,14 @@
 ---
 description: Structural code review against lab standards (run before opening a PR)
 argument-hint: "[branch | PR number | path]"
-allowed-tools: Read, Grep, Glob, Write, Task, Agent, Bash(git diff:*), Bash(git log:*), Bash(git show:*), Bash(git status:*), Bash(git branch:*), Bash(git rev-parse:*), Bash(git rev-list:*), Bash(git remote:*), Bash(git submodule status:*), Bash(git -C bloomlab-code-standards fetch:*), Bash(gh pr view:*), Bash(ruff:*), Bash(black:*), Bash(snakefmt:*), Bash(snakemake:*)
+allowed-tools: Read, Grep, Glob, Write, Task, Agent, Bash(git diff:*), Bash(git log:*), Bash(git show:*), Bash(git status:*), Bash(git branch:*), Bash(git rev-parse:*), Bash(git rev-list:*), Bash(git remote:*), Bash(git submodule status:*), Bash(git -C bloomlab-coding-standards fetch:*), Bash(gh pr view:*), Bash(ruff:*), Bash(black:*), Bash(snakefmt:*), Bash(snakemake:*)
 ---
 
-Review the current changes against the lab coding standards in `bloomlab-code-standards/CLAUDE.md`. If an argument is given, review that instead (a branch, PR number, or path): $ARGUMENTS — ignore that placeholder if it is empty or arrives uninterpreted, which is what happens when this file is read directly rather than run as a slash command. Otherwise review the diff of the current branch against `main` (e.g. `git diff main...HEAD`), plus any uncommitted changes.
+Review the current changes against the lab coding standards in `bloomlab-coding-standards/CLAUDE.md`. If an argument is given, review that instead (a branch, PR number, or path): $ARGUMENTS — ignore that placeholder if it is empty or arrives uninterpreted, which is what happens when this file is read directly rather than run as a slash command. Otherwise review the diff of the current branch against `main` (e.g. `git diff main...HEAD`), plus any uncommitted changes.
 
 This is a **structural** review. You are checking whether the change keeps scientific decisions visible and the codebase reviewable — not whether the science is correct. Where the science is in question, your job is to surface it for a human, not to adjudicate it.
 
-**Run the review in a fresh subagent.** Dispatch one general-purpose subagent and give it only the diff range to review, the path to `bloomlab-code-standards/CLAUDE.md`, and the checklist below. Do not pass it anything else from this session. If this session wrote the code under review, a same-session review is the author grading their own work, and it grades kindly. Write the review from what the subagent reports back.
+**Run the review in a fresh subagent.** Dispatch one general-purpose subagent and give it only the diff range to review, the path to `bloomlab-coding-standards/CLAUDE.md`, and the checklist below. Do not pass it anything else from this session. If this session wrote the code under review, a same-session review is the author grading their own work, and it grades kindly. Write the review from what the subagent reports back.
 
 **The review changes nothing.** Do not edit, fix, or reformat any file in the repository while producing it — fixing a finding mid-review invalidates the very diff the review describes. Fixes come after the review has been presented, and are followed by a fresh review. (Writing the review itself to `_review.md`, below, is the one file this command creates.)
 
@@ -40,20 +40,20 @@ Check, in order of importance:
 
 13. **Tooling.** Confirm the changed code passes `ruff`, `black`, `snakefmt`, and `snakemake --lint`. Run them if they are available; if they cannot be run, say so rather than assuming they pass.
 
-Before writing the review, check whether the standards submodule is up to date. This must never block or fail the review: run `git -C bloomlab-code-standards fetch --quiet origin`, then `git -C bloomlab-code-standards rev-list --count HEAD..origin/HEAD`, falling back to `origin/main` where `origin/HEAD` is not set (which is common in a submodule). If the fetch or comparison fails for any reason (offline, no remote, detached oddities), record `freshness not checked` in the stamp and move on. If the count is zero, record `up to date`; if greater than zero, record `behind origin by N commits` and add a one-line note at the end of the review reminding the author to update: `git submodule update --remote bloomlab-code-standards && git add bloomlab-code-standards && git commit -m "Update lab coding standards"`.
+Before writing the review, check whether the standards submodule is up to date. This must never block or fail the review: run `git -C bloomlab-coding-standards fetch --quiet origin`, then `git -C bloomlab-coding-standards rev-list --count HEAD..origin/HEAD`, falling back to `origin/main` where `origin/HEAD` is not set (which is common in a submodule). If the fetch or comparison fails for any reason (offline, no remote, detached oddities), record `freshness not checked` in the stamp and move on. If the count is zero, record `up to date`; if greater than zero, record `behind origin by N commits` and add a one-line note at the end of the review reminding the author to update: `git submodule update --remote bloomlab-coding-standards && git add bloomlab-coding-standards && git commit -m "Update lab coding standards"`.
 
 Then write the review with exactly these sections, beginning with a provenance stamp:
 
 - **Provenance stamp** — a short fenced block at the very top, populated from actual git commands (never from memory):
 
   ```
-  bloomlab-code-standards structural review
+  bloomlab-coding-standards structural review
   repo:      <git remote get-url origin, or "no remote">
   branch:    <git rev-parse --abbrev-ref HEAD>
   reviewed:  <git rev-parse HEAD>  (HEAD at time of review)
   diff:      <base>...<head range actually reviewed, e.g. main...HEAD>
   tree:      clean | DIRTY (uncommitted changes were included in this review)
-  standards: <short SHA of the bloomlab-code-standards submodule>  (up to date | behind origin by N commits | freshness not checked)
+  standards: <short SHA of the bloomlab-coding-standards submodule>  (up to date | behind origin by N commits | freshness not checked)
   date:      <UTC timestamp>
   ```
 
