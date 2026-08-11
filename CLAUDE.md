@@ -72,7 +72,7 @@ How input data is best organized depends on what it is: a table with one row per
 
 ## Code style
 
-- Code must pass `ruff`, `black`, `snakefmt`, and `snakemake --lint` before it is committed. Tool configuration lives in `pyproject.toml`.
+- Code must pass `ruff`, `black`, `snakefmt`, and `snakemake --lint` before it is committed. Tool configuration lives in `pyproject.toml`. This covers the repository's own files; a submodule's are checked in its repository, not here.
 - Scripts are small and single-purpose. Any logic used more than once becomes a named, documented function that is imported — never copy-pasted between scripts or notebooks.
 - The default shape for "add an analysis": new config entry + new Snakemake rule + new small script (or reuse an existing function). Do not grow an existing script with unrelated logic, and do not duplicate a script with small edits.
 - Keep code concise. Prefer simple, readable code over clever code, and do not add abstractions, generality, or dependencies beyond what the task requires.
@@ -94,6 +94,7 @@ How input data is best organized depends on what it is: a table with one row per
 
 - Lab pipelines are included as git submodules. Read the submodule's own `CLAUDE.md` and follow its conventions; a project's `CLAUDE.md` should point at it.
 - Never add project-specific rules or data to a shared submodule.
+- A submodule's own code is linted and reviewed in its own repository, so in a project that includes one, raise nothing about how the submodule's files are written — no style, formatting, lint, length, or documentation findings. What is in scope is a genuine bug, and a change the upstream repository needs in order to function correctly; both belong there as an issue or a pull request, not as a local edit. Adding project-specific rules or data to the submodule, and working around an upstream limitation locally, remain findings — neither is a question of style.
 - Do not recompute or re-plot what an included pipeline already produces; read its outputs.
 - If a lab-maintained package (`seqneut-pipeline`, `dms-vep-pipeline-3`, `neutcurve`, `polyclonal`, `nextstrain-prot-titers-tree`, and similar) does not do exactly what is wanted, propose opening an issue in that repository. Tell the user; do not silently hack around it locally.
 - Keep submodules and conda environments reasonably current with released software versions. Where a version is deliberately held back, say why in a comment.
