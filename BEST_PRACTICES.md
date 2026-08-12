@@ -1,14 +1,14 @@
 # Lab Best Practices for Computational Projects
 
-This document explains how we organize computational work in the lab and, more importantly, why. The short version of every rule lives in [`CLAUDE.md`](CLAUDE.md), which AI assistants read automatically. This document is for you, the human. Read it once carefully; return to it when a rule seems arbitrary.
+This document explains how we organize computational work in the lab and, more importantly, why. The short version of every rule lives in [`CLAUDE.md`](CLAUDE.md), which AI assistants read automatically. This document is for you, the human.
 
 [`CLAUDE.md`](CLAUDE.md) is the normative rule set and this document explains it; if the two ever disagree, `CLAUDE.md` wins and the discrepancy is a bug to fix here.
 
-## The problem these standards solve
+## Goal of these standards
 
-With agentic AI tools like Claude Code, each of us can now produce far more code than anyone can read line by line. That changes what review means. Instead of reviewing every line of code, review focuses on the things a human must get right: what data went in, what experimental and analytical choices were made, and whether the structure of the analysis is sound. The code itself is checked structurally, against a fixed checklist ([`/review`](commands/review.md)) that the author runs and attaches to the pull request.
+With agentic AI tools like Claude Code, it is easy to produce far more code than anyone can read line by line. That changes what review means. Instead of reviewing every line of code, review focuses on the things a human must get right: what data went in, what experimental and analytical choices were made, and whether the structure of the analysis is sound. The code itself is checked structurally, against a fixed checklist ([`/review`](commands/review.md)) that the author runs. This review can be run periodically as you are developing new code, and then should also be run anytime you have finalized changes and made a pull request. You should run the review on your own code changes as you make them, and then you can also run it on your own or someone else's pull request.
 
-This only works if a project keeps those concerns physically separated. If the list of samples to exclude is buried on line 340 of a script, no one will ever see it in review. If it sits in a config file under a clearly-named key, it is impossible to miss. Almost everything in this document follows from that one idea: **scientific decisions must be visible in small, reviewable files, not embedded in code.**
+This only works if a project keeps data, configuration, code, and results clearly separated. If a list of spurious samples to exclude is buried on line 340 of a script, no one will ever see it in review. If it sits in a config file under a clearly-named key, it is impossible to miss. Almost everything in this document follows from that one idea: **scientific decisions must be visible in small, reviewable files, not embedded in code.**
 
 A useful test for whether a project meets the standard: could someone review the science of your analysis by reading only `config.yml`, the files in `data/`, and the Snakemake rules — without opening a single script? If yes, the structure is right.
 
@@ -24,28 +24,35 @@ my-project/
 ├── config.yml             # ALL experimental parameters live here
 ├── Snakefile              # the workflow: config, includes, rules, `rule all`
 ├── rules/                 # optional: `.smk` files split out of a long Snakefile
-├── scripts/               # small, single-purpose scripts called by rules
-├── notebooks/             # exploration, and any notebook a rule runs
+├── scripts/               # small, single-purpose scripts called by Snakemake rules
+├── notebooks/             # notebooks called by Snakemake rules
 ├── data/                  # ALL input data
 ├── results/               # ALL generated output; gitignored except key files
-├── auspice/               # optional: Nextstrain Auspice JSONs
+├── auspice/               # optional: Nextstrain Auspice JSONs output
 ├── non-pipeline_analyses/ # optional: one-off analyses not run by the Snakefile
 ├── pyproject.toml         # project metadata + linter/formatter configuration
-├── environment.yml        # conda environment (or one per rule / per analysis)
+├── environment.yml        # conda environment (or one per rule / per analysis in `./envs`)
 └── <lab-pipeline>/        # lab pipelines as git submodules
 ```
 
-Not every project needs every entry. A small project may be a handful of scripts with no `Snakefile` at all. What does not vary is the direction of the arrows: `config.yml` and `data/` are inputs that code reads and never writes; `results/` is output; the workflow is the machinery that turns the former into the latter. When the arrows point only one way, anyone can delete `results/` and regenerate it, which is the practical definition of a reproducible analysis.
+Not every project needs every entry. A small project may be a handful of scripts with no `Snakefile` at all. What does not vary is the direction of the arrows: `config.yml` and `data/` are inputs that code reads and never writes; `results/` is output; the workflow is the machinery that turns the former into the latter. It should always be the case that you can delete `results/` and regenerate it by running the pipeline, which is the practical definition of a reproducible analysis.
 
-There is one narrow exception. A data file that is itself built from another data file — a curated subset, a reformatted export — may be generated by a script kept next to it in `data/`, run by hand, with both the script and its output committed. The pipeline still only reads the resulting file. What makes this acceptable is that the provenance is in the repository rather than in someone's shell history.
+There is one narrow exception. A data file that is itself built from another data file — a curated subset, a reformatted export — may be generated by a helper script kept next to it in `data/`, run by hand, with both the script and its output committed. The pipeline still only reads the resulting file. What makes this acceptable is that here the script is simply being used as a one-time helper to better format or construct the input data file (eg, converting a static Excel spreadsheet you created by hand into a machine-readable CSV for the pipeline).
 
-Large raw data (sequencing runs, imaging) usually cannot live in git. In that case `data/` holds the manifests and a README pointing to the canonical storage location, and paths to the raw store go in `config.yml` or in data CSVs — never hardcoded in scripts.
+Every other path in the project is relative — to the repository root, or to a root configured in `config.yml` for a file in an external store. Eg, you write `./data/samples.csv`, not `/fh/fast/bloom_j/jbloom/samples.csv`. An absolute path is a statement that the analysis runs on exactly one filesystem: it breaks the moment a colleague clones the repository, or you move between the cluster and a laptop. `snakemake --lint` flags absolute paths for this reason.
+The one exception is large raw data (sequencing runs, imaging), which usually cannot live in git. In that case `data/` holds files (eg, CSVs or YAML configuration files) pointing to the FASTQs. The paths to those raw data files always live in `data/` or `config.yml`, never hardcoded in a script or notebook.
 
-Every other path in the project is relative — to the repository root, or to a root named in `config.yml` for a file in an external store. An absolute path is a statement that the analysis runs on exactly one filesystem: it breaks the moment a colleague clones the repository, or you move between the cluster and a laptop, and it does so with an error that points at someone else's home directory. `snakemake --lint` flags absolute paths for this reason. The one exception is those large raw files on the cluster, which have no in-repository location to be relative to — and even they are named in `config.yml` or a manifest, not in a script. (Snakemake's own path resolution has a wrinkle worth knowing; see the appendix.)
+As a concrete example, if you are specifying a list of samples on a plate, some metadata about them, and FASTQ files with the data, this should **never** be hardcoded into a script. Instead you might have a file called `./data/samples.csv` that has contents like:
+```
+well,serum,dilution_factor,replicate,fastq
+A1,flu-seqneut-2026-SCH-001,40,1,/shared/ngs/illumina/bloom_lab/260806_VH00319_627_AAF3KVNHV/Unaligned/Project_bloom_lab/PlateB_1_S1_R1_001.fastq.gz
+B1,flu-seqneut-2026-SCH-001,92,1,/shared/ngs/illumina/bloom_lab/260806_VH00319_627_AAF3KVNHV/Unaligned/Project_bloom_lab/PlateB_2_S2_R1_001.fastq.gz
+C1,flu-seqneut-2026-SCH-001,212,1,/shared/ngs/illumina/bloom_lab/260806_VH00319_627_AAF3KVNHV/Unaligned/Project_bloom_lab/PlateB_3_S3_R1_001.fastq.gz
+```
 
-Auspice JSONs are the other deliberate departure from "all output goes to `results/`". They may be written to `auspice/` and committed, because Nextstrain Community Builds serve trees from that directory of the repository; putting them anywhere else means they cannot be displayed.
+Auspice JSONs are the one deliberate departure from "all output goes to `results/`". They may be written to `auspice/` and committed, because [Nextstrain Community Builds](https://docs.nextstrain.org/en/latest/guides/share/community-builds.html) serve trees from that directory of the repository.
 
-Scratch work has a sanctioned home: prefix a throwaway file with `_` and ignore `_*` in `.gitignore`. An exploratory script, an intermediate table pulled out to eyeball, a note-to-self — all of it can sit in the working tree next to the real files without any risk of being committed. This matters more than it sounds. Without a scratch convention, temporary work goes one of two bad places: into `scripts/`, where it is indistinguishable from real pipeline code and lives forever, or outside the repository, where it is lost along with the reasoning behind it. It also gives an AI assistant somewhere to put an exploratory pass. The rule is simply that nothing `_`-prefixed is part of the project, so nothing `_`-prefixed is ever committed.
+Scratch files that you are writing or making for temporary work but do not intend to save as part of the overall project have a sanctioned naming convention: prefix scratch files or directories with `_` and ignore `_*` in `.gitignore`. This enables you to put temporary or exploratory files into your local directory with names like `_temp_nodes.md` without committing them with git. Just remember that such files will not get committed, so anything you want to be permanent should not be named this way.
 
 Every project's `.gitignore` starts from the same four lines:
 
@@ -56,27 +63,70 @@ _*
 *.out
 ```
 
-The first two ignore dotfiles while keeping `.gitignore`, `.gitmodules`, and `.github/` tracked, so editor state, environment directories, and per-person tool settings stay out of the repository without anyone having to enumerate them. The third is the scratch convention above. The fourth catches cluster scheduler output, which otherwise piles up in whatever directory the job was submitted from. Project-specific rules go below these — chiefly the `results/` block described under [Results](#results-what-goes-in-git). The one thing to know is that a dotfile you *do* want tracked needs `git add -f`: git refuses to add an ignored path by name, and re-including it with a `!` rule means un-ignoring each parent directory first.
+The first two ignore dotfiles while keeping `.gitignore`, `.gitmodules`, and `.github/` tracked, so editor state, environment directories, and per-person tool settings stay out of the repository without anyone having to enumerate them. The third is the scratch convention above. The fourth catches cluster scheduler output, which otherwise piles up in whatever directory the job was submitted from. Project-specific rules go below these — chiefly the `results/` block described under [Results](#results-what-goes-in-git). If you need to override these rules to include a specific file you can add that path to be an exception to those rules with a `!`, as in adding a line like `!.dot_file_to_include`.
 
-Analyses that are run by hand rather than by the workflow live in `non-pipeline_analyses/`, one subdirectory each, with its own config, conda environment, and README. Prefer that name over local inventions like `manual_analyses` or `scratch_notebooks`. This directory is where projects rot fastest: it accumulates near-duplicate notebooks, re-implements things the pipeline already computes, and commits hundreds of generated figures. Treat anything there as provisional. When an analysis becomes load-bearing, migrate it into the pipeline as a rule plus a script — and port only the part the pipeline does not already provide, rather than moving a notebook across whole.
+Analyses that are run by hand rather than by the workflow live in `non-pipeline_analyses/`, one subdirectory each, with an explanatory README (use `non-pipeline_analyses`, not other names like `manual_analyses` or `scratch_notebooks`). This directory is where projects rot fastest: these analyses are not updated when the pipeline is re-run or re-configured, and they accumulate near-duplicate notebooks and quantities the pipeline already computes. Treat anything there as provisional. When an analysis becomes load-bearing, migrate it into the pipeline as a rule plus a script, making sure not to duplicate things the pipeline already does.
 
-## Input data: record what was done
+## Input data and configuration: record what was done
 
-This is the section to read twice. Most of the expensive failures in computational biology are not bugs in the analysis; they are analyses faithfully computing the wrong thing because the input file could not say what actually happened at the bench.
+Many failures in computational biology — and especially in computational biology done with agentic AI — are not bugs in the analysis; they are analyses faithfully computing the wrong thing because the input files did not accurately describe the actual experiment.
 
-A file in `data/` is a record of an experiment, and for some of what it holds it is the only record that will ever exist. Write it to be read literally rather than reconstructed.
+A file in `data/` is a record of an experiment. Write it to directly record the experimental and sample details in its content; do not require it to be parsed in some complicated way to infer experimental details from file names or complex fields.
 
-**The shape is a choice; make it deliberately.** A table with one row per unit is the common case and the right default for anything that fits it. But a unit that needs a reference sequence, an annotation, and two exclusion lists is not a row; there, a directory per unit with the same filenames in each says it better, and lets the pipeline derive the file set from the unit name instead of listing it in config. A small set of structured choices may read best as YAML; sequences belong in FASTA with a metadata sidecar. None of these is more correct in general. What makes one right is that it says what happened without the reader having to reconstruct it.
-
-The rules below are written in terms of columns because tables are the common case, but they are not about tables. Read *column* as whatever the chosen shape's equivalent is — a field, a key, a file in a unit's directory. "One column, one job" means one slot carries one fact. "No sentinel values" means no value that has to be explained elsewhere. "Record it, do not infer it later" means the same thing in every shape, and it is the point of all of them.
-
-**Record it; do not infer it later.** A fact that was known when the experiment was set up — which sample went into which well, which wells got nothing — belongs in the input file. Recovering it downstream from a heuristic (the nearest matching well, a name prefix, a hardcoded list of positions) throws away information that was free to capture, and silently caps what the analysis can detect. A real example from the lab: a plate CSV recorded which strain was in each well but not which barcode, so an analysis looking for cross-contamination had to guess the source of stray reads by proximity. Because replicate rescues of the same strain sat in adjacent wells, that heuristic scored genuine carry-over between neighbors as distance zero — it was structurally blind to exactly the contamination it existed to find. Recording the barcode per well fixed the analysis by deleting the heuristic.
-
-**One column, one job.** In the same file, a single `strain` column was simultaneously naming a library strain, marking a control kind, indexing a replicate through `_1`/`_2`/`_3` suffixes, and carrying a free-text note. A column like that can be neither joined on nor validated, and every consumer has to re-derive its four meanings with string parsing. Split it: give each fact its own column, even where the column is constant for most rows.
-
-**An identifier names one thing.** The same failure shows up in names, and it is worth its own example because it looks so harmless. Two projects in the lab record much the same kind of viral library. One gives each strain a name that encodes its attributes:
-
+**Carefully choose how to structure input data to most clearly describe the experiment.**
+The best way to organize your inputs will depend on the data.
+If you have a list of samples and annotations, then a CSV or TSV file with clearly named columns is often the best option.
+But in other cases, it may be clearer to use a YAML file that includes different data.
+For instance, the block below points to a *samples_csv* whose rows give the details of what samples are in each well, and then states once the experimental information associated with the plate as a whole, such as the date it was run:
+```yaml
+plate3:
+  group: human
+  date: 2026-01-20
+  viral_library: actual
+  neut_standard_set: loes2023
+  samples_csv: data/plates/2026-01-20_plate3.csv
+  manual_drops: {}
+  qc_thresholds:
+    <<: *default_process_plate_qc_thresholds
+  curvefit_params:
+    <<: *default_process_plate_curvefit_params
+  curvefit_qc:
+    <<: *default_process_plate_curvefit_qc
+  illumina_barcode_parser_params:
+    upstream2: TGACGC # Fwd3
+    upstream2_mismatch: 1
 ```
+
+**Record it explicitly; do not infer it later.** A fact that was known when the experiment was set up — which sample went into which well, which wells got nothing — belongs in the input file. Do not make the code try to recover this information from a heuristic or by assuming some specific order for the data.
+
+For instance, let's say you have a CSV defining the samples in the 96 wells of a plate and which replicate they are.
+The CSV below would be a *BAD* structure, because the well numbers do not specify the actual wells (does 1, 2, ... mean A1, A2, ... or A1, B1, ...?), because the replicate is just a suffix string on the sample (eg, *wildtype_1* for *wildtype*, replicate 1), and because "empty" is not actually a sample name:
+```csv
+well_number,sample
+1,wildtype_1
+2,wildtype_2
+...
+94,E484A_1
+95,E484A_2
+96,empty
+```
+A *GOOD* organization for the same CSV would be:
+```csv
+well,sample,replicate,empty
+A1,wildtype,1,False
+A2,wildtype,2,False
+...
+H10,E484A,1,False
+H11,E484A,2,False
+H12,,,True
+```
+
+**An identifier should mean one thing, with one column per attribute.**
+Related to the above point, use a different column for each attribute.
+Do not encode multiple meanings in the same column via complex string names that require your script to do complex parsing to extract the meaning from an entry.
+For instance, the following is a *BAD* way to describe viral strains, the year they were in the vaccine, their subtype, and whether they are cell or egg vaccine strains:
+
+```csv
 strain_long_name
 1978_A/USSR/90/1977_H1N1
 1987-C-A/Taiwan/1/1986_H1N1
@@ -84,7 +134,7 @@ strain_long_name
 A/Albany/2/1970_H3N2
 ```
 
-Four facts are packed into one string: the year the strain was used in a vaccine, whether it was grown in eggs or cells (`E`/`C`), the strain name itself, and the subtype. The other project records the same four facts as four columns, and lets the identifier be nothing but a name:
+Instead, the *GOOD* way to do this is to unpack the different attributes into different columns, such as:
 
 ```csv
 strain,subtype,vaccine_year,passage_history
@@ -94,86 +144,121 @@ A/Solomon_Islands/3/2006,H1N1seasonal,2007,egg
 A/Albany/2/1970,H3N2,,cell
 ```
 
-The second is better for reasons that compound:
+The second is better than the first, because in the first organization:
 
-- **The encoding is never applied consistently.** Look at the first two rows above: one separates the year with `_` and carries no passage marker, the next uses `-` and carries `-C-`. No regex parses both. In practice a parser gets written, then patched, then quietly gets some rows wrong.
-- **Absence is ambiguous.** The fourth row has no year prefix. Is it a strain that was never in a vaccine, or a vaccine strain whose year nobody filled in? The name cannot say. In the column version, an empty `vaccine_year` means "not a vaccine strain" — and that is a claim validation can check against `strain_type`.
-- **Nothing can be joined, grouped, or sorted without parsing.** Ordering by year, faceting by subtype, or comparing egg- against cell-grown strains each require pulling the attribute back out of the string. That parsing is then copied into every script and notebook that needs it, and each copy is a place to get it wrong.
-- **Nothing can be validated.** A column of years can be checked to be years, and a passage column to be one of a known set. A substring of a name cannot.
-- **Correcting an attribute changes the identifier.** This is the one that really hurts. If the passage designation turns out to be wrong, fixing it renames the strain — which breaks every join against every other file, every result already written, and every reference in a talk or a paper. An identifier should be a stable handle. Attributes change; names should not have to.
+ - **The encoding is never applied consistently.** Look at the first two rows above: one separates the year with `_` and carries no passage marker, the next uses `-` and carries `-C-`. No regex parses both. In practice a parser gets written, then patched, then quietly gets some rows wrong.
+ - **Absence is ambiguous.** The fourth row has no year prefix. Is it a strain that was never in a vaccine, or a vaccine strain whose year nobody filled in? The name cannot say. In the column version, an empty `vaccine_year` is an explicit claim that the strain was never in a vaccine, and validation can check that the column holds either a plausible year or nothing at all.
+ - **Nothing can be joined, grouped, or sorted without parsing.** Ordering by year, faceting by subtype, or comparing egg- against cell-grown strains each require pulling the attribute back out of the string. That parsing is then copied into every script that needs it, and each copy is a place to get it wrong.
+ - **Nothing can be validated.** A column of years can be checked to be years, and a passage column to be one of a known set. A substring of a name cannot.
+ - **Correcting an attribute changes the identifier.** If the passage designation turns out to be wrong, fixing it renames the strain — which breaks every join against every other file and every result already written. An identifier should be a stable handle. Attributes change; names should not have to.
 
-The rule: an identifier names one thing. Give each attribute its own column, and let the name be a name.
+The rule: give each attribute its own column, and let the name be a name.
 
-**Do not use sentinel values.** Two pool plates marked their no-virus wells with `dilution_factor: 0`, in a column whose every other value was a real dilution. Nothing in the file said what `0` meant, so every analysis had to be told — which the configs did, with a `no_virus_label: 0` key. Adding an explicit `well_type` column (`pool` or `none`) and leaving `dilution_factor` empty on the no-virus rows made the file self-describing and deleted the config key.
+**Avoid sentinel values.** If a well is empty, indicate that with a column or an identifier that says so; do not come up with ad hoc encodings in which a *dilution_factor* of 0 means the well is empty. If nothing in the file says that `0` means empty, every analysis has to be told.
 
-Those two examples generalize into the most useful diagnostic in this document:
+**Experimental configuration and data are specified, never reconstructed from results.** A fact that can be recorded — which barcode went into a well, which serum is on which plate — is recorded in the input data. Never recover it by analyzing the results, for instance by taking the most abundant barcode in a well to be the one that was pipetted into it. Otherwise a sample mix-up gets laundered into a confirmed label by the analysis that was supposed to catch it.
 
-> **If code or configuration has to be told what a value in a data file means, the data file is wrong.**
+**Downloaded data records where it came from.**
+Sometimes your input data might include a sequence downloaded from a public database, a CSV manually taken from another repository, or a manually downloaded external file. In this case, the subdirectory containing the data should also have a README saying how and when the data was manually downloaded; putting the date in the directory or file name (eg, `Genbank_2026-01-12_sequences/`) works just as well for the *when*.
+Where you instead create an input data file with a manual script, include that script alongside the data saying how it was run to create the file.
+In many cases you may be able to download the data as *part of the pipeline*, and that is the better option where the source allows it: the data then doesn't show up in `data/` at all but rather just in the configuration file that specifies the URL it is downloaded from.
+However, for downloads of data that change over time (eg, bulk NCBI downloads) that pipeline should then create a file like `results/ncbi_dataset/*_download_date.txt` that records when it was downloaded.
 
-A config key whose only job is to translate a value, or an exclusion list that exists because a mislabeled value breaks something, is a workaround for a data file that does not say what happened. Fix the file and delete the key. 
+The above paragraph applies only to data taken from an external pre-existing source, however.
+Most of what sits in `data/` is not downloaded at all: a plate layout, a sample manifest, a list of strains to exclude and why, a numbering map worked out by hand. Those files were produced by the experimenters, and the repository is their origin — there is no upstream URL to cite and no download date to record.
 
-**Recording a value is not duplicating it.** The single-source-of-truth rule sometimes gets over-applied to data files: "the library CSV already maps strains to barcodes, so the plate CSV should not name a barcode." That is wrong. The library map says which barcode *belongs to* a strain; the plate CSV says which barcode was *pipetted into a well*. Those are different facts, and only one of them is an observation. What the rule actually forbids is stating the same fact twice. Where a file does deliberately carry a derivable column as a cross-check, the code must assert that the two agree rather than trusting either.
+## Single-source data and configuration
 
-**A value reconstructed from results is not an observation.** If a column was filled in by inferring it from the very data it will be used to analyze, say so where it is recorded and get it confirmed against the bench records. Otherwise a sample mix-up gets laundered into a confirmed label by the analysis that was supposed to catch it.
+**Record data values and configuration in just one place.**
+Do not record the same input data in multiple places; this gets confusing and can lead to conflict and difficulty in maintenance.
+For instance, if you need to map a barcode to a viral strain and other information, have a single file that does.
+You might have a file `data/viral_libraries/library.csv` that defines the mapping of barcodes to strains and strain information:
+```csv
+strain,barcode,collection_date,protein_sequence
+A/Norway/8765/2025,ATTGCAACGCCGGTGT,2025.76,QNIPGNDNST...
+A/Norway/8765/2025,ACCAGGTGGCAGTACA,2025.76,QNIPGNDNST...
+A/NewSouthWales/2526015582/2025,CGAAGATGAGCCCTCG,2025.75,QNIPGNDNST...
+...
+```
 
-The mechanical conventions are the easy part. Where an input is tabular it is plain UTF-8 CSV or TSV with a single header row and descriptive column names — no merged cells, no color coding, no meaning carried by formatting, nothing exported from a spreadsheet with notes typed into stray cells. Where it is structured some other way, the equivalents hold: descriptive names, and nothing meant by position or layout. Missing values are empty fields, not a mixture of `NA`/`-`/`?`/`999`. Identifiers are read as strings everywhere, so that sample "007" does not become sample 7.
+Such a file should be the **single source** for the mapping of barcode to strain, collection date, protein sequence, etc.
+If you have other attributes you want to associate with the barcodes and strains, put them in this file and do *NOT* also read barcode to strain mappings from other files!
+This general principle applies: define key information (about viral strains, barcode mappings, plate-well mappings, metadata about sera, etc) in one unique location for each set of related information, so things are easily updated and there are not multiple sources that could conflict and are hard to maintain.
+Of course, some keys will be shared: for instance, if you have per-plate files mapping barcodes to wells, the barcodes will be repeated in the viral barcode to strain information mapping CSV, and also in the well to barcode CSV, but do not repeat the barcode to strain information mapping in multiple files.
 
-**Downloaded data records where it came from and when.** A sequence set pulled from a public database, a CSV taken from another repository, an external data release — none of these are reproducible by re-running the query, because the answer changes. The download date is what lets someone a year later understand what the analysis actually saw. Projects in the lab do this three ways, all fine: a README beside the file giving the source URL; the date in the directory name (`Genbank_2026-01-12_sequences/`); or a small date file written next to the download. That last one composes nicely with selective tracking — one project ignores the bulk NCBI download entirely but tracks `results/ncbi_dataset/*_download_date.txt`, so the repository records *when* even though it cannot hold *what*. (A download fetched by a rule is generated output and lands in `results/` like anything else; it is only the date file that is tracked. What follows applies to it wherever it lands.)
+However, recording a value is not duplicating it.
+The single-source-of-truth rule sometimes gets over-applied to data files: "the library CSV already maps strains to barcodes, so the plate CSV should not name a strain along with a barcode."
+In general it is true that the plate CSV does not need the strain but only the barcode, but sometimes the experimenter may have recorded the strain alongside the barcode, and that is OK — but in this case the code should still also read the single-source-of-truth barcode-to-strain mapping and raise an error if it does not agree with a plate-specific one.
 
-This is about *downloaded* data only. Most of what sits in `data/` is not downloaded at all: a plate layout, a sample manifest, a list of strains to exclude and why, a numbering map worked out by hand. Those files were produced by the experimenters, and the repository is their origin — there is no upstream URL to cite and no download date to record. What they owe the reader is covered by the rest of this section: record what was done, one column one job, and say so where a value was inferred rather than observed.
-
-The pipeline validates all of this before doing any work — see [Fail fast, fail loud](#fail-fast-fail-loud). Writing the validation is cheap (and Claude Code is good at generating it); debugging a silent join on a malformed input three stages later is not.
-
-The less declarative the shape, the more this matters. A missing column in a CSV is obvious; a unit directory missing one of its ten expected files is not, until something fails three rules later with a path in the message. Check the contract up front, and name the unit and the missing piece.
+**Use git history with informative commits, do not keep obsolete versions of files except when there is a good reason.**
+If your `./data/` directory starts to have files like `viral_library_old.csv`, `viral_library_fixed.csv`, `viral_library_fixed-2026-05-27.csv` each containing an update to the same file but with progressive fixes made, it gets very hard to keep track of what has changed and which is the correct file to use.
+If you find an error, just fix it and make an informative commit message explaining the fix, and the old incorrect / obsolete version can still be accessed via the git history.
+In general, you should just be storing the current correct version of a file, not older obsolete versions too.
+In certain cases there might be a justification for keeping an original and older file (eg, a *designed* and *actual* clean library if you want to record what you started with and then ended up with), but such cases should be rare and clearly explained in the README.
 
 ## Configuration: no experimental parameters in code
 
-An experimental parameter is anything a reviewer of the *science* would want to see or might reasonably ask you to change: sample inclusion/exclusion, thresholds and cutoffs, reference genome or database versions, statistical test choices, model hyperparameters, normalization methods, random seeds, file paths. All of these belong in `config.yml` with descriptive key names and a comment explaining any non-obvious choice.
+An experimental parameter is anything a reviewer of the *science* would want to see or might reasonably ask you to change: sample inclusion/exclusion, thresholds and cutoffs, reference genome identifier, model parameters, random seeds, etc.
+All of these belong in `config.yml` with descriptive key names and a comment explaining any non-obvious choice.
 
-The difference in practice:
+*NEVER* include configuration-like choices in code.
+For instance, it is *BAD* if your script or notebook has code like this:
 
 ```python
 # BAD: scientific decisions invisible inside a script
-df = df[df["qc_score"] > 0.8]
-df = df[~df["sample_id"].isin(["S104", "S117"])]   # why? who decided?
+df = df[df["qc_score"] > 0.8]  # who chose 0.8?
+df = df[~df["well"].isin(["A12", "B12"])]   # why are we dropping A12 and B12?
 ```
+
+The good way to do this is to specify specific choices in the configuration:
 
 ```yaml
 # GOOD: config.yml — the decision is visible and reviewable
 qc:
   min_qc_score: 0.8
-excluded_samples: ["S104", "S117"]   # failed library prep, see ELN entry 2026-03-14
+excluded_wells: [A12, B12]  # pipetting error for these wells
 ```
 
-The code change is trivial; the review change is enormous. A diff that modifies `config.yml` is a scientific change and gets scrutinized as one. A diff that only touches `scripts/` should be a purely technical change — and if a script diff smuggles in a new threshold, that is exactly what the [`/review`](commands/review.md) checklist is instructed to flag.
+The reason is that embedding scientific decisions inside the code means that every line of code must be reviewed to understand experimental details, and if you apply the new script to another plate it will drop wells A12 and B12 even if there was no pipetting error on the second plate.
+In contrast, if this is specified in `config.yml` it is easy to look at and see the configuration.
 
-Two rules keep the config from becoming its own maintenance problem.
+Sometimes a script may use parameters that are not worth specifying in configuration.
+For instance, maybe we want the script to print the top 10 barcodes in a report.
+It may not be worth cluttering configuration with that, so the script can have a hardcoded parameter specifying this:
+```python
+N_TO_PRINT = 10  # print this many top barcodes
+```
+However, when this is done the hardcoded constants should be specified at the top of the script once with clear documentation, and such hardcoding of constants should **never** encompass experimental configuration / data or parameters that are key to how an analysis works.
 
-**Do not enumerate in the config anything that can be read from the data.** The names of the sera, the list of samples, the wells on a plate: these are in `data/`. Configuration names the inputs and the choices and lets the pipeline derive the rest, so that adding a sample or a plate does not require editing configuration in three places. A config that lists what the data already says will eventually disagree with it.
+A few rules keep the config from becoming so huge it becomes its own maintenance problem.
 
-**Access required keys directly.** Write `config["min_counts"]`, not `config.get("min_counts", 500)`. A `.get` with a default silently substitutes a scientific parameter when the config is wrong, which is precisely the failure mode the whole standard exists to prevent — and it puts a second copy of the value in the code, where nobody reviewing the config will see it. Reserve `.get` for genuinely optional keys, and comment at the point of use why the key is optional. Where a whole section is optional (a project need not run every kind of QC), apply that default in exactly one place, comment why, and keep everything nested inside the section required.
+**Do not enumerate in the config anything that can be read from the data.** The names of the sera, the list of samples, the wells on a plate: these are generally best specified in data CSVs. Configuration names the inputs and the choices and lets the pipeline derive the rest, so that adding a sample or a plate does not require editing configuration in three places. A config should not duplicate what can better be put in data CSVs.
 
-**Keep the configuration as simple as it can be** while still conveying what is needed. Every key is something a reader has to understand and a maintainer has to keep true. Do not add a key, a nesting level, or a switch that nothing actually requires — an option added "in case we want it later" is a parameter that is never reviewed and never exercised. Configuration accretes: keys outlive the analyses that read them, and a config full of dead entries is one nobody trusts. Remove keys nothing looks up.
+**Access required keys directly and do not guess defaults.** Write `config["min_counts"]`, not `config.get("min_counts", 500)`. A `.get` with a default silently substitutes a scientific parameter when the config is wrong, which is precisely the failure mode the whole standard exists to prevent — and it puts a second copy of the value in the code, where nobody reviewing the config will see it. Reserve `.get` for genuinely optional keys, and comment at the point of use why the key is optional. Where a whole section is optional (a project need not run every kind of QC), apply that default in exactly one place, comment why, and keep everything nested inside the section required.
+
+**Keep the configuration as simple as it can be** while still conveying what is needed. Every key is something a reader has to understand and a maintainer has to keep true. Do not add a key, a nesting level, or a switch that nothing actually requires — an option added "in case we want it later" is a parameter that is never reviewed and never exercised. Configuration accretes: keys outlive the analyses that read them, and a config full of dead entries is one nobody trusts. Remove keys nothing looks up, and always be thinking of ways to simplify the configuration.
 
 **Configuration that outgrows the config file goes in `data/`.** Some things are genuinely configuration but do not belong inline in `config.yml`: a detailed specification for a complex plot, a long list of strains to exclude from a subsampling, a site numbering map, a reference sequence to align against. Put these in their own file in `data/` and reference the path from a `config.yml` key. The test is not size alone — it is whether inlining it would bury the choices that matter under bulk. Such a file is still configuration, so everything in this document still applies to it: it is an input, code never writes to it, it is validated when read, and a scientific choice recorded there is as reviewable as one in `config.yml`.
 
 **Factor repetition rather than copy-pasting it** — but reach for the cheapest tool that works, and be willing to reach for none of them. If the same block appears under every entry, first ask whether it can be derived from the data instead of configured at all; that is always the best answer. If it genuinely has to be in the config, a YAML anchor (`&name` / `*name`) states the shared value once and refers to it everywhere else. Only when a whole set of entries is generated from one template — say a tree per subtype, each with the same structure — is it worth the templating engine; projects here use YTE, enabled with `__use_yte__: true` at the top of the config. Keep that last resort last: a templated config cannot be read as the thing the pipeline actually receives, which costs exactly the reviewability the config exists to provide.
 
-That last argument is worth turning on the anchor as well. A set of per-experiment entries — one block per plate, per run, per batch — that share most fields and differ in two is repetition, but each block is also a standalone record of one experiment, readable end to end without chasing a reference defined ninety lines earlier. Factoring it is usually still the better call and always worth suggesting; requiring it is not, because what gets optimized away is the same legibility the config exists to provide. What does need factoring is repetition past that point: blocks identical in every field, a block repeated across unrelated sections, or enough entries that a reader can no longer see which fields actually vary. That is where copies stop being records and become a place for one of them to quietly differ.
+However, some repetition in the config is OK when it maximizes readability. A set of per-experiment entries — one block per plate, per run, per batch — that share most fields and differ in two is repetition, but each block is also a standalone record of one experiment, readable end to end without chasing a reference defined ninety lines earlier. Factoring it is usually still the better call and always worth suggesting; requiring it is not, because what gets optimized away is the same legibility the config exists to provide. What does need factoring is repetition past that point: blocks identical in every field, a block repeated across unrelated sections, or enough entries that a reader can no longer see which fields actually vary.
 
 Finally: YAML is indented two spaces per level, everywhere. Mixed indentation in a config file is a real source of silently misparsed blocks.
 
 ## Results: what goes in git
 
-Everything the workflow generates goes in `results/`, and everything in `results/` can be deleted and regenerated. That much is standard. The part worth stating explicitly is what gets *tracked*.
+Everything the workflow generates goes in `results/`, and everything in `results/` can be deleted and regenerated.
+Nonetheless, often some results should be tracked in git.
+The reason is that even if the analysis is reproducible in principle, it may require substantial time or access to large FASTQ files on the Bloom lab server to actually run the analysis, so we want to make key results available on GitHub without bloating the repository.
 
-Do not track all of `results/`: it is large, mostly intermediate, and regenerable by definition. But do not track none of it either. Someone reading the repository — a collaborator, a reviewer, you in three years — should be able to get the main scientific results without installing the environment and running the pipeline. So track the compact, human-readable outputs: the final titer or effect-size CSVs, the QC summaries, the small YAML or text reports. Leave out anything large or binary.
+So do not track all of `results/`: it is large, mostly intermediate, and regenerable by definition. But often some of it should be tracked.
+Someone reading the repository — a collaborator, a reviewer, you in three years — should be able to get the main scientific results without installing the environment and running the pipeline. So track compact, human-readable outputs: the final titer or mutation-effect CSVs, the QC summaries, the small YAML or text reports. Leave out anything large or binary.
 
-Between those two lies a judgment call, and it belongs to the project. Some intermediates earn their place: per-sample barcode counts are bulky and regenerable in principle, but only by re-running against FASTQs that live on the cluster, so having them in the repository is what lets someone re-derive a titer without that. Track such a file where the project decides it is a record worth holding — but decide it once, in `.gitignore`, and apply it consistently. What is not a judgment call is the direction of the default: ignore first, re-include deliberately, and never track a file merely because the pipeline happened to produce it.
+Exactly how much to track is a judgment call that may vary across projects. Some intermediates earn their place: per-sample barcode counts are bulky and regenerable in principle, but only by re-running against FASTQs that live on the cluster, so having them in the repository is what lets someone re-derive a titer without that. Track such a file where the project decides it is a record worth holding — but decide it once, in `.gitignore`, and apply it consistently. What is not a judgment call is the direction of the default: ignore first, re-include deliberately, and never track a file merely because the pipeline happened to produce it.
 
-Where a project is built on a lab pipeline, that decision has usually already been made for the pipeline's own outputs. `seqneut-pipeline` and `dms-vep-pipeline-3` each ship a reference `.gitignore` at `test_example/.gitignore`, saying exactly which of that pipeline's outputs are worth keeping. Copy it as the starting point for the project's `.gitignore` and add the project's own analyses below it. Which of a pipeline's outputs to track is a question about the pipeline, settled once in its repository — a project that re-argues it file by file ends up disagreeing with every other project built on the same pipeline, for no reason either of them can reconstruct later.
-
-What that obliges the project to do is keep every pattern, and the obligation runs in both directions. A path the reference re-includes is one the pipeline decided is worth having in the repository, so a pattern present there and missing from the project's `.gitignore` is not a stylistic difference: it is an output the project has quietly decided not to keep, without anyone deciding it. The check is on the set of ignore and re-include patterns, not on the text — comments will drift, ordering does not matter, and a project adds plenty of its own patterns below. And the file to compare against is the one in the submodule at its currently pinned commit, which is why this is worth re-reading after a submodule update rather than once at setup: the reference grows as the pipeline grows. A project including both pipelines carries the union of the two.
+Where a project is built on a lab pipeline, a best-practices decision has usually already been made for the pipeline's own outputs. `seqneut-pipeline` and `dms-vep-pipeline-3` each ship a reference `.gitignore` at `test_example/.gitignore`, saying exactly which of that pipeline's outputs are worth keeping. Copy it as the starting point for the project's `.gitignore` and add the project's own analyses below it.
+The project then has to keep every one of those patterns: one present in the reference and missing locally is not a stylistic difference but an output the project has quietly stopped tracking. The reference grows as the pipeline grows, so re-check it after a submodule update rather than only at setup.
 
 The mechanism is an ignore-then-re-include block in `.gitignore`, below the default lines every project starts from. Note the second line: git cannot re-include a file if one of its parent directories is excluded, so the directories have to be un-ignored first.
 
@@ -187,13 +272,16 @@ results/**
 !results/qc_drops/*.yml
 ```
 
-The same discipline applies to output from analyses outside the main pipeline. A `non-pipeline_analyses/` subdirectory that has committed two hundred generated PNGs and HTMLs is not preserving anything anyone will read.
+The same discipline applies to output from analyses outside the main pipeline. A `non-pipeline_analyses/` subdirectory that has committed two hundred generated PNGs and HTMLs is not preserving anything anyone will read and will bloat the git history.
 
-And nothing in `results/` is ever read as primary input by a later run of the same pipeline.
+But despite this tracking, ensure that nothing in `results/` is ever read as primary input by a later run of the same pipeline.
 
-Two small habits keep those tracked outputs readable. The first: do not write a meaningless index. `to_csv` writes the dataframe index by default, which for a freshly-built frame is an unnamed column of 0, 1, 2, … that carries no information, and comes back as `Unnamed: 0` the next time anyone reads the file. Pass `index=False`. Where the index does carry information — a sample ID, a site number — write it, and make sure it has a name so the column is self-describing.
+Several small habits keep tracked CSV / TSV outputs readable:
+ - Do not write a meaningless index. The pandas `to_csv` writes the dataframe index by default, which for a freshly-built frame is an unnamed column of 0, 1, 2, … that carries no information, and comes back as `Unnamed: 0` the next time anyone reads the file. Pass `index=False`. Where the index does carry information — a sample ID, a site number — write it, and make sure it has a name so the column is self-describing.
 
-The second: write numbers at a sensible precision. Left alone, pandas writes floats at full repr — seventeen digits of a quantity measured to two. That bloats the file, makes every diff churn on meaningless trailing digits, and implies a precision the measurement does not have. Default to five significant digits (`float_format="%.5g"`); choose something else deliberately where it fits the quantity better, such as a fixed number of decimals (`"%.3f"`) for a value that is naturally read that way. When writing code that emits numbers, ask what precision is wanted — and if no one says, use five significant digits.
+ - Write numbers at a sensible precision. Left alone, pandas writes floats at seventeen digits, which usually far exceeds the precision of the experiment. That bloats the file, makes every diff churn on meaningless trailing digits, and implies a precision the measurement does not have. Default to five significant digits (`float_format="%.5g"`); choose something else deliberately where it fits the quantity better, such as a fixed number of decimals (`"%.3f"`) for a value that is naturally read that way. When writing code that emits numbers, ask what precision is wanted — and if no one says, use five significant digits.
+
+ - Do not write unneeded columns. This is a judgment call, but make sure you are not writing CSVs with scratch columns or too many columns easily derived from each other.
 
 ## Pipelines: Snakemake
 
@@ -240,25 +328,25 @@ Environments are pinned — per-rule conda environments or a project-level lockf
 
 Exploratory work does not need a pipeline. The moment an analysis produces a result you might put in a talk or a paper, it moves into one.
 
-## Simple, modular, concise code
+## Simple, modular, concise code and documentation
 
-The historical failure mode in this lab is the sprawling notebook: analysis v1 copied to v2, cells duplicated and lightly edited, the same plotting code pasted five times with different hardcoded filenames. This was survivable when a person wrote every line. With AI assistance it becomes unmanageable fast, because an assistant asked to "do the same thing for the new dataset" will happily produce a sixth copy.
+Our lab has historically suffered from the sprawling Jupyter notebook: analysis v1 copied to v2, cells duplicated and lightly edited, the same plotting code pasted five times with different hardcoded filenames. This was a bad practice when a person wrote every line, and it is even worse practice when AI is writing the lines.
 
-The standard is: any logic used more than once becomes a named function with a docstring, and is imported everywhere it is used. Scripts stay small and single-purpose — one script, one transformation, with explicit inputs and outputs — because small units are what Snakemake composes and what a reviewer can actually understand. Prefer boring, readable code over clever code; in a research setting the reader is usually you, eight months from now, trying to figure out what past-you meant.
+The standard is: any logic used more than once becomes a named function with a docstring. Scripts stay small and single-purpose — one script, one transformation, with explicit inputs and outputs — because small units are what Snakemake composes and what a reviewer can actually understand. Prefer boring, readable code over clever code; in a research setting the reader is usually you, eight months from now, trying to figure out what past-you meant.
 
-Length is itself a defect. AI assistants write far more code than the problem needs: helper layers nobody calls twice, configurability nobody asked for, defensive branches for cases that cannot arise. Ask for the shortest version that is still clear, and delete the rest.
+Length is itself a defect. AI assistants write far more code than the problem needs: helper layers nobody calls twice, configurability nobody asked for, defensive branches for cases that cannot arise, more comments than are needed. Ask for the shortest version that is still clear, and delete the rest. Ask Claude Code to periodically make sure it is not being more verbose or complicated than needed.
 
-The same goes for comments. A comment earns its place by saying why, not by restating what the line already says. And it should describe the code as it stands — **not how it got there.** When you improve something, just improve it: no comment or docstring explaining what the function "now" does, what it used to do, or why the new approach replaced the old one. That text is written for one reader on one day; everyone after reads a description of a version that no longer exists, and two more edits make it actively misleading. Git holds the history, and a commit message is where a change *should* be explained. `now`, `new`, `updated`, `previously`, `legacy`, `no longer`, `instead of` — in a comment these almost always mean the text is narrating a change rather than describing the code. (This document is the exception that proves the rule: a teaching document argues from before and after, because the contrast *is* the lesson. Project code and project docs have no such excuse.)
-
-Related: never write the same content twice. If output should match a log, redirect to the log and copy it at the end; do not write the content out in two places and hope they stay in sync.
+The same goes for comments. A comment earns its place by saying why, not by restating what the line already says. And it should describe the code as it stands — **not how it got there.** When you improve something, just improve it: no comment or docstring explaining what the function "now" does, what it used to do, or why the new approach replaced the old one.
 
 **Prune what nothing uses.** Repositories accumulate: a data file no config key references, a script no rule runs, a rule no target needs, a config key nothing looks up, results superseded three analyses ago. Dead entries are worse than clutter — they make a reader unsure which file is the real one, and they get copied forward into the next project. Whenever a change makes something obsolete, say so and propose removing it in a follow-up. The one thing to be careful with is `data/`: an input file may be the only surviving record of an experiment, so raise it as a question rather than deleting it.
 
 When you ask Claude Code to add an analysis, the right shape of the change is: a new config entry, a new rule, a new small script (or a call to an existing function). If the diff instead appends 200 lines to an existing script or duplicates one, ask it to refactor. [`CLAUDE.md`](CLAUDE.md) instructs it to prefer this shape, but you are the backstop.
 
-All new and changed code must pass `ruff`, `black`, `snakefmt`, and `snakemake --lint` before being committed, with the tool configuration in `pyproject.toml`. These are cheap and catch a real class of mistakes; there is no reason for a commit not to pass them. Adopting the standards in an existing repository does not mean fixing everything already in it — see ["What the standards apply to"](README.md#what-the-standards-apply-to).
+All new and changed code must pass `ruff`, `black`, `snakefmt`, and `snakemake --lint` before being committed, with the tool configuration in `pyproject.toml`. These are cheap and catch a real class of mistakes; there is no reason for a commit not to pass them. Adopting the standards in an existing repository does not mean fixing everything already in it — see [what a review looks at](#commits-pull-requests-and-review).
 
-## Fail fast, fail loud
+The same rule applies to READMEs and other documentation: keep your README informative but don't let the AI assistant bloat it.
+
+## Fail fast, fail loud — never guess at defaults or data semantics
 
 Research code should be brittle in a specific, useful way: the moment reality deviates from your assumptions, it should stop and say exactly what it expected and what it found. The alternative — coercing, imputing, or silently dropping — turns data problems into wrong figures.
 
@@ -280,13 +368,11 @@ if not bad.empty:
 
 Concretely: validate inputs at the boundary (start of each script or rule); raise on unexpected values rather than substituting defaults; never use a bare `except:`; make error messages name the file, the column, and the offending values. An informative failure five seconds into a run is a gift. A pipeline that completes on bad input is a liability.
 
-Validation is also worth doing in the workflow itself, not only in scripts, when it catches a *configuration* error. A config entry that references another entry which is not configured should fail with "X is not configured; the configured entries are Y, Z" — not with a missing-input-file error naming a path that means nothing to the reader.
+**Never guess at defaults or the meaning of incompletely configured experiments** — always raise an error, or say that more information is needed.
+We want the analysis to fail, not pass with incorrectly guessed defaults or configuration.
+This principle is why [`CLAUDE.md`](CLAUDE.md) contains its most important rule: when handling an issue requires a judgment about experimental design or data semantics — what a column means, whether an outlier is an error or a result, which samples belong in an analysis, what a missing value implies — the assistant must stop and ask a human rather than choose a plausible default. "Plausible default" is exactly how silent scientific errors get made at machine speed.
 
 There is a boundary here worth naming, because it is easy to overshoot in the enthusiasm of the previous two paragraphs. Validation checks structure and references: that a key is present, that an identifier is unique, that a referenced file exists, that a column holds one of a known set of values. It does not check that a recorded bench value is the *right* one. Whether the six primer indices in a plate config are the six actually used, whether a dilution series matches what was pipetted, whether a plate date is correct — none of these can be settled by code, because the only thing to compare against is a bench record the pipeline has never seen. A human confirms those, against the notebook. Writing the check anyway produces something that looks like a safeguard and is not, which is worse than its absence; asking for it in review spends the reviewer's credibility on a demand nobody can satisfy.
-
-The line is not "do not validate configuration" — a config entry referencing an unconfigured entry is a structural error and should fail loudly, as above. Nor does it retract the cross-check rule from [Input data](#input-data-record-what-was-done): where a file deliberately carries a column derivable from another, asserting that the two agree compares two things the code actually holds. What lies out of reach is only the comparison against a fact that exists nowhere but on paper.
-
-The same principle governs AI assistants, which is why [`CLAUDE.md`](CLAUDE.md) contains its most important rule: when handling an issue requires a judgment about experimental design or data semantics — what a column means, whether an outlier is an error or a result, which samples belong in an analysis, what a missing value implies — the assistant must stop and ask a human rather than choose a plausible default. "Plausible default" is exactly how silent scientific errors get made at machine speed.
 
 ## Tests
 
@@ -294,15 +380,13 @@ Analysis projects do not need a test suite. An analysis runs on one set of real 
 
 Reused code is different. A function in `neutcurve`, a rule in `seqneut-pipeline`, anything imported by projects other than the one it was written for, has no single set of inputs to be validated against and nobody watching the run in which it breaks. A regression there is silent and propagates into every project that pins the new commit. So new or changed shared functionality in a lab package or pipeline submodule comes with a test, in that repository. The distinction is what the code is *for*, not where it sits: a helper in a project's own `scripts/` that only that project imports is analysis code, and acquires tests if it is ever promoted into a package.
 
-The appendix describes how to run a rule's script against a stub `snakemake` object. That is not a test suite and is not required of an analysis project, but it is the cheapest way to reach a failure case the committed data does not contain — a malformed input, a missing column — and confirm the script fails the way it should.
+## Notebooks versus scripts
 
-## Notebooks
-
-Prefer a plain Python script. Before writing a notebook, ask whether the same thing can be done more concisely as a script — usually it can, and the result is shorter, lintable, diffable, and callable from a rule.
+When coding with an AI assistant, generally prefer a plain Python script over a Jupyter or marimo notebook. Before writing a notebook, ask whether the same thing can be done more concisely as a script — usually it can, and the result is shorter, lintable, diffable, and callable from a rule.
 
 Notebooks are not banned. They are the right tool for exploration, for sanity-checking intermediate results, and for a deliverable interactive report that someone will actually open. Existing notebooks in a project are fine to keep and extend. The preference is strongest for newly added content: a new analysis should default to a script, and a proposal to add a notebook should say why a script would not do.
 
-Where a notebook is load-bearing — the pipeline depends on what it produces — it must be run by a rule with explicit inputs and outputs, like any other step, and kept under version control in a diffable form (marimo notebooks are plain `.py`; clear outputs from Jupyter notebooks before committing). A notebook that reads from `results/` and imports shared functions rather than redefining them stays maintainable; one that redefines them becomes the sixth copy.
+Where a notebook is load-bearing — the pipeline depends on what it produces — it must be run by a rule with explicit inputs and outputs, like any other step, and kept under version control in a diffable form (marimo notebooks are plain `.py`; clear outputs from Jupyter notebooks before committing).
 
 ## Altair plots
 
@@ -322,23 +406,16 @@ Lab pipelines — `seqneut-pipeline`, `dms-vep-pipeline-3`, `nextstrain-prot-tit
 
 Never add project-specific rules or data to a shared submodule, and do not recompute or re-plot what an included pipeline already produces. If the pipeline already fits the curves, aggregates the results, and renders the QC charts, an analysis in your project exists to add what it does not cover — read its outputs rather than re-deriving them from scratch.
 
-**A submodule's code is reviewed where it lives.** It was written under these same standards, linted in its own repository, and pinned here at a commit. So a review of a project that includes one has nothing useful to say about how those files are written: a style or length finding there cannot be acted on from the project at all — fixing it means a commit in another repository, a pull request against it, and a pointer bump back here, which is a separate piece of work from whatever the project's change was about. Read a submodule to check that the project *uses* it correctly, not to check how it is written. What does deserve raising is a real bug, or something the upstream repository needs in order to function correctly; the response to both is an issue or a pull request there, which this section already asks for. The rule reverses when the repository under review *is* the pipeline or the package — then it is the code that other projects import, and the full standard applies to it, tests included.
+**A submodule's code is reviewed where it lives.** It was written under these same standards, linted in its own repository, and pinned here at a commit. Read a submodule to check that the project *uses* it correctly, not to check how it is written. What does deserve raising is a real bug, or something the upstream repository needs in order to function correctly; the response to both is an issue or a pull request there. The rule reverses when the repository under review *is* the pipeline or the package — then it is the code that other projects import, and the full standard applies to it, tests included.
 
-**If a lab-maintained package does not do exactly what you want, open an issue in that repository.** This applies to `neutcurve`, `polyclonal`, `dms-vep-pipeline-3`, `seqneut-pipeline`, `nextstrain-prot-titers-tree`, and the rest. The local alternative — a wrapper that post-processes the output into the shape you needed, a copy of the function with one line changed — solves the problem once, for you, invisibly, and every other project keeps hitting it. Raising the issue is usually less work and always more useful. An AI assistant should propose this rather than quietly building the workaround.
+**If a lab-maintained package does not do exactly what you want, open an issue in that repository.** This applies to `neutcurve`, `polyclonal`, `dms-vep-pipeline-3`, `seqneut-pipeline`, `nextstrain-prot-titers-tree`, and the rest. The local alternative — a wrapper that post-processes the output into the shape you needed, a copy of the function with one line changed — solves the problem once, for you, invisibly, and every other project keeps hitting it.
 
 Keep submodules and conda environments reasonably current with released software versions. Pinning is for reproducibility of a completed analysis, not for avoiding upgrades; a project that never updates drifts until the upgrade becomes a project of its own. Where a version is deliberately held back, say why in a comment next to the pin.
 
-**Channels: `conda-forge`, then `bioconda`, then `nodefaults`.** The order is not cosmetic — bioconda packages are built *against* conda-forge dependencies, so putting bioconda first can pull an incompatible build of a shared library and produce a failure far from its cause. Never list `defaults`: it mixes ABI-incompatible builds with conda-forge, giving solver conflicts and subtle runtime breakage. (Anaconda's licensing terms for that channel are also restrictive for large organizations, which is worth confirming with the Hutch, but the technical reason stands on its own.)
+**Channels: `conda-forge`, then `bioconda`, then `nodefaults`.** The order is not cosmetic — bioconda packages are built *against* conda-forge dependencies, so putting bioconda first can pull an incompatible build of a shared library and produce a failure far from its cause. Never list `defaults`: it mixes ABI-incompatible builds with conda-forge, giving solver conflicts and subtle runtime breakage. (Anaconda's licensing terms for that channel are also restrictive and the Hutch does not allow use of `defaults`.)
 
-Leaving `defaults` out is not sufficient, which is the part that surprises people. Conda's environment installer does this:
-
-```python
-channel_urls = [chan for chan in env.channels if chan != "nodefaults"]
-if "nodefaults" not in env.channels:
-    channel_urls.extend(context.channels)
-```
-
-Without `nodefaults`, conda appends *the local user's configured channels* to whatever your file lists, so the file stops being an authoritative specification and becomes a starting point each machine extends differently. The asymmetry is what makes this bite: if your own `~/.condarc` is already `conda-forge, bioconda`, the appended channels are harmless duplicates and everything works — while a collaborator on a stock Miniconda install, whose configured channel is `defaults`, silently gets it added to the solve. `nodefaults` makes the file mean the same thing everywhere. Position in the list does not matter, but convention puts it last.
+Leaving `defaults` out may not be sufficient.
+Without `nodefaults`, conda can append *the local user's configured channels* to whatever your file lists, so the file stops being an authoritative specification and becomes a starting point each machine extends differently. The asymmetry is what makes this bite: if your own `~/.condarc` is already `conda-forge, bioconda`, the appended channels are harmless duplicates and everything works — while a collaborator on a stock Miniconda install, whose configured channel is `defaults`, silently gets it added to the solve. `nodefaults` makes the file mean the same thing everywhere. Position in the list does not matter, but convention puts it last.
 
 One setting cannot live in the environment file and is worth doing once per machine: `conda config --set channel_priority strict`. It is what makes the channel ordering actually binding rather than advisory, and bioconda recommends it.
 
@@ -358,29 +435,29 @@ Four places carry documentation, and each has one job. Duplication between them 
 
 Two rules cut across all four. **Say where something is configured, never what the current configuration is:** write "the thresholds are set under *serum_qc_thresholds* in `config.yml`", not "the minimum is 3". And **describe a thing in exactly one place**, cross-referencing it from anywhere else that needs it.
 
-This is why documenting columns in prose is the exception rather than the default. A CSV is read alongside its own header, and a column dictionary in Markdown goes stale the moment a column is added, while the validator cannot. Provenance is what prose is reliably good at: how a file was made, what it was derived from, when it was downloaded, why some rows are absent.
+This is why documenting columns in prose is the exception rather than the default. A CSV is read alongside its own header, and a column dictionary in Markdown goes stale the moment a column is added, while the validator cannot.
 
-But the default is not a prohibition. A README — the top-level one, or one in `data/` — should describe columns in detail where the file is not self-documenting. Two cases earn it. The first is a **hand-authored input**: a file someone must create correctly before the pipeline will run at all, where the README is the only place the authoring contract can live, and is worth extending into a short "to add a new X, create these files" procedure. The second is a **convention a reader could not infer from the file itself** — for instance a table where a blank field is a deliberate decision ("this token was considered and intentionally skipped") rather than a gap. No validator can distinguish those two, and someone will otherwise fill the blank in.
-
-The test is whether a careful reader with the file open still needs telling. If yes, write it down. If the header, the config comments, and the validation error messages already say it, do not restate it — and never let a README turn into a configuration spec.
+But the default is not a prohibition. A README — the top-level one, or one in `data/` — should describe columns in detail where the file is not self-documenting. Two cases earn it. The first is a **hand-authored input**: a file someone must create correctly before the pipeline will run at all, where the README is the only place the authoring contract can live, and is worth extending into a short "to add a new X, create these files" procedure. The second is a **convention a reader could not infer from the file itself** — for instance a table where a blank field is a deliberate decision ("this token was considered and intentionally skipped") rather than a gap.
 
 Keep `README.md` current. Any change that adds, removes, or redirects an analysis or a result file updates it in the same change.
 
 ## Commits, pull requests, and review
 
-**One conceptual change per commit and per pull request.** This is the most commonly broken rule in the lab, and it is the one that makes review impossible. A pull request that adds an analysis, renames some files, fixes an unrelated bug, and reformats a script cannot be reviewed — the reviewer either reads all of it or none of it, and in practice reads none of it. Splitting the same work into four small commits costs a few minutes and makes each one obvious.
-
-Watch for this while the work is happening, not just at the end. It is easy, especially with an AI assistant, to notice something adjacent and fix it in passing; three of those and the change is unreviewable. `CLAUDE.md` instructs assistants to flag this as it develops and propose a split — but you should be watching too, because the assistant is the one most likely to cause it.
+**Try to limit to one conceptual change per commit and per pull request.** This is the most commonly broken rule in the lab, and it makes review difficult. A pull request that adds an analysis, renames some files, fixes an unrelated bug, and reformats a script is harder to review than four separate commits and pull requests.
+However, in real-world bioinformatics analyses sometimes you find a need to refactor some code or fix a bug when adding new data, so some limited combining will happen, but at least try to limit this.
+If you have completed something, make the pull request then, before you then start something conceptually different.
 
 A commit message says what changed and why, and names any workaround the change removes. The best commit messages in the lab's repositories read like short arguments: here is what the file could not express, here is what the code had to do to compensate, here is what both look like now.
 
-All work reaches `main` through a pull request, even in single-author repos — the PR is where the review is posted and where the record of decisions accumulates. A good PR description states what scientific question or task the change addresses and calls out any change to `config.yml` or `data/` explicitly, since those are the scientifically meaningful diffs.
+All work reaches `main` through a pull request, even in single-author repos — the PR is where a review can be posted and where the record of decisions accumulates. A good PR description states what scientific question or task the change addresses and calls out any change to `config.yml` or `data/` explicitly, since those are the scientifically meaningful diffs.
 
-**Make the branch enforce it**, rather than relying on everyone remembering. On GitHub: Settings → Rules → Rulesets → New branch ruleset, target the default branch, and enable *Require a pull request before merging* and *Block force pushes*. (The older equivalent is Settings → Branches → Add branch protection rule.) Two settings decide whether this does anything at all. Set *required approvals* to 1 in multi-author repos or ones being reviewed by the PI, and to 0 in a single-author repository: GitHub will not let you approve your own pull request, and a rule you cannot satisfy is one you will end up switching off. And enable **do not allow bypassing**, or repository admins keep pushing straight to the default branch and the rule constrains only the people who were not going to break it anyway.
+**Make the branch enforce a requirement for pull requests**, rather than relying on everyone remembering. On GitHub: Settings → Rules → Rulesets → New branch ruleset, target the default branch, and enable *Require a pull request before merging* and *Block force pushes*. (The older equivalent is Settings → Branches → Add branch protection rule.) Two settings decide whether this does anything at all. Set *required approvals* to 1 in multi-author repos or ones being reviewed by the PI, and to 0 in a single-author repository: GitHub will not let you approve your own pull request, and a rule you cannot satisfy is one you will end up switching off. And enable **do not allow bypassing**, or repository admins keep pushing straight to the default branch and the rule constrains only the people who were not going to break it anyway.
 
-Structural review (the [`/review`](commands/review.md) checklist, attached to the PR as a comment) checks structure: separation of config from code, whether the input data records what happened, modularity, error handling, pipeline hygiene, and scope. It does not certify that the science is right. Usually the author runs it, but anyone can — a review posted by a co-author or by the PI counts the same. What matters is that the review attached to the PR describes the PR's head commit, so whoever reviews the PR first checks that the comment is present and that the `reviewed:` SHA in its provenance stamp matches — a missing or stale stamp means the review needs to be re-run. Changes to experimental logic, sample sets, or statistical approach still get eyes from the PI or a designated reviewer; the point of all this structure is to make those diffs small enough that they actually can.
+Structural review (the [`/review`](commands/review.md) checklist, attached to the PR as a comment) checks structure: separation of config from code, whether the input data records what happened, modularity, error handling, pipeline hygiene, and scope. It does not certify that the science is right. Usually the author runs it, but anyone can.
 
-Findings do not have to be resolved before the review is posted. Fix them and post a clean review, or post the review as it stands and argue the findings out in the PR thread; the second is often the better record. What is not allowed is posting a review of one commit against a different one, which is why the review is re-run rather than saved and re-used.
+A review can look at either a diff or the whole repository, and which one is up to you. By default it reads a diff — the current branch against `main`, or a pull request, or a path you name — and says nothing about code the change did not touch, except where the change makes something obsolete. Ask for a whole-repository review when you want the checklist applied to the project as it stands. That is the right move when you first adopt these standards in an existing repository: doing so does not oblige you to bring the whole repository into line at once, and a whole-repository review is how you see what it would take.
+
+Findings do not have to be resolved before the review is posted. Fix them and post a clean review, or post the review as it stands and argue the findings out in the PR thread; the second is often the better record. Also, sometimes the review will flag things that the experiment can actually identify as not a problem, so in that case just explain why they do not need to be addressed.
 
 ## Working with Claude Code
 

@@ -1,21 +1,25 @@
 # bloomlab-coding-standards
 
-Shared coding standards for the lab. This repository is the single source of truth for how we organize computational projects, and it is designed to be read by both humans and AI coding assistants (Claude Code).
+Shared coding standards for the lab; includes documents for both humans and AI coding assistants (Claude Code).
 
 ## What's in here
 
 | File | Audience | Purpose |
 |---|---|---|
-| [`BEST_PRACTICES.md`](BEST_PRACTICES.md) | Humans | The full guide: what our standards are and *why*. Read this once, carefully, when you join the lab. |
+| [`BEST_PRACTICES.md`](BEST_PRACTICES.md) | Humans | Human-centered description of lab coding standards and rationale. Read this carefully. |
 | [`CLAUDE.md`](CLAUDE.md) | Claude Code | A terse rule sheet loaded into every Claude Code session via import. Kept short on purpose. |
-| [`commands/review.md`](commands/review.md) | Claude Code | The `/review` slash command: a structural code review you run locally before opening a pull request and attach to the PR. |
-| [`templates/project-CLAUDE.md`](templates/project-CLAUDE.md) | New projects | Starter project-level CLAUDE.md that imports the lab rules. |
+| [`commands/review.md`](commands/review.md) | Claude Code | Structural code review you run locally on your code, which you can also attach to a pull request. |
+| [`templates/project-CLAUDE.md`](templates/project-CLAUDE.md) | New projects | Template project-level `CLAUDE.md` that imports the lab standards. |
+
+## How to interact with Claude Code
+
+**Choose the model to fit the task.** Claude Code offers several models that differ in capability and usage cost; switch between them with `/model`. Design or debugging problems are worth the most capable models; routine edits may not be. If you are not sure how the models differ or which to pick, ask Jesse or someone who does.
+
+**For anything complex, ask for a plan.** Claude Code has different modes that you can switch between, including a plan mode. For anything complex, first explain to Claude Code the goal and your ideas for how it might be accomplished, then ask it to make a plan that you review together. Only then should you ask it to implement the plan. Except for routine edits, this approach is better than just having it make changes without first discussing the plan. The reason is that while Claude Code is extremely unlikely to make technical errors in writing code (much less likely than you!), it can often make conceptual or structural errors if it does not understand the task. _It is your job to clearly plan and define the task._
 
 ## Installing Claude Code and `gh`
 
-We have Claude Code licenses through HHMI — talk to Jesse if you do not have one.
-
-**Choose the model to fit the task.** Claude Code offers several models that differ in capability and in how fast they use up your quota; switch between them with `/model`. A hard design or debugging problem is worth the most capable one; a routine edit is not. If you are not sure how the models differ or which to pick, ask Jesse or someone who does.
+Our lab has Claude Code licenses through HHMI — talk to Jesse if you do not have one.
 
 **Get `~/.local/bin` onto your `PATH` first.** Both tools below install there, and neither will run until your shell looks there. Check whether it already does:
 
@@ -50,9 +54,9 @@ gh auth login    # GitHub.com → HTTPS → login with a web browser
 
 `gh` is a single static binary with no dependencies, but unlike Claude Code it does not update itself, so re-run the above from time to time.
 
-`gh` is optional, and you can always just ask Claude Code to install and authenticate it for you. Without it, `/review` prints the review and you paste it into a pull request comment yourself. **Pasting is always an acceptable fallback — tooling problems are never a reason to be stuck.** 
+`gh` is optional, and you can always just ask Claude Code to install and authenticate it for you. Without it, `/review` prints the review and you paste it into a pull request comment yourself. **Pasting is always an acceptable fallback — tooling problems are never a reason to be stuck.**
 
-## Adding the standards to a project
+## Adding these standards to a project
 
 From the root of your project repository:
 
@@ -78,15 +82,14 @@ Optionally, if you want a literal `/review` slash command (with autocomplete), s
 ```bash
 mkdir -p .claude/commands
 ln -s ../../bloomlab-coding-standards/commands/review.md .claude/commands/review.md
+```
+
+Optionally, if you want to actually commit this `/review` command into the git history rather than just in your local copy, do:
+
+```bash
 git add -f .claude/commands/review.md    # -f: the default .gitignore ignores dotfiles
 git commit -m "Add /review slash command"
 ```
-
-## What the standards apply to
-
-The standards govern new and changed code. Adding them to an existing repository does not oblige you to bring the whole repository into line, and you should not try: the review only ever looks at a diff, so it will not flag code you did not touch. Existing code migrates opportunistically, as you happen to work on it — a script you are already editing gets its hardcoded threshold moved into `config.yml`; one you are not, does not.
-
-The exception is anything your change makes obsolete. A script, rule, or config key that your change supersedes is part of that change, and the review will point it out.
 
 ## Updating the standards submodule in your project
 
