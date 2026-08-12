@@ -1,4 +1,4 @@
-# bloomlab-code-standards
+# bloomlab-coding-standards
 
 Shared coding standards for the lab. This repository is the single source of truth for how we organize computational projects, and it is designed to be read by both humans and AI coding assistants (Claude Code).
 
@@ -57,27 +57,27 @@ gh auth login    # GitHub.com → HTTPS → login with a web browser
 From the root of your project repository:
 
 ```bash
-git submodule add https://github.com/jbloomlab/bloomlab-code-standards bloomlab-code-standards
+git submodule add https://github.com/jbloomlab/bloomlab-coding-standards bloomlab-coding-standards
 git commit -m "Add lab coding standards as submodule"
 ```
 
 Then create a project-level `CLAUDE.md` at the repo root (copy [`templates/project-CLAUDE.md`](templates/project-CLAUDE.md) as a starting point). Its first line imports the lab rules:
 
 ```markdown
-@bloomlab-code-standards/CLAUDE.md
+@bloomlab-coding-standards/CLAUDE.md
 ```
 
 If the project already has a `CLAUDE.md`, just add that import line at the top of it.
 
 Claude Code concatenates memory files, and more specific instructions take precedence, so anything you add below the import can extend or override the lab defaults for that project. Keep `CLAUDE.md` to coding instructions only — what the project is and its scientific context belong in the project's `README.md`.
 
-That's all the setup the review needs: the imported lab rules tell Claude Code where the review instructions live, so in any session you can simply ask — "run the lab review" — and it will follow [`bloomlab-code-standards/commands/review.md`](commands/review.md).
+That's all the setup the review needs: the imported lab rules tell Claude Code where the review instructions live, so in any session you can simply ask — "run the lab review" — and it will follow [`bloomlab-coding-standards/commands/review.md`](commands/review.md).
 
 Optionally, if you want a literal `/review` slash command (with autocomplete), symlink the command file into the project's command directory (the symlink stays in sync when the submodule is updated):
 
 ```bash
 mkdir -p .claude/commands
-ln -s ../../bloomlab-code-standards/commands/review.md .claude/commands/review.md
+ln -s ../../bloomlab-coding-standards/commands/review.md .claude/commands/review.md
 git add -f .claude/commands/review.md    # -f: the default .gitignore ignores dotfiles
 git commit -m "Add /review slash command"
 ```
@@ -93,8 +93,8 @@ The exception is anything your change makes obsolete. A script, rule, or config 
 Standards are pinned per-project at a specific commit of this repo. To pull the latest standards into a project:
 
 ```bash
-git submodule update --remote bloomlab-code-standards
-git add bloomlab-code-standards
+git submodule update --remote bloomlab-coding-standards
+git add bloomlab-coding-standards
 git commit -m "Update lab coding standards"
 ```
 

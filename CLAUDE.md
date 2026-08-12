@@ -1,8 +1,8 @@
 # Lab coding standards (master rules)
 
-These rules apply to all lab repositories. Project-level CLAUDE.md files may extend or override them. Rationale and examples: [`bloomlab-code-standards/BEST_PRACTICES.md`](BEST_PRACTICES.md) (consult only when needed). This file is the normative rule set; if the two documents ever disagree, this file wins.
+These rules apply to all lab repositories. Project-level CLAUDE.md files may extend or override them. Rationale and examples: [`bloomlab-coding-standards/BEST_PRACTICES.md`](BEST_PRACTICES.md) (consult only when needed). This file is the normative rule set; if the two documents ever disagree, this file wins.
 
-When the user asks to run the lab review (`/review`, "structural review", "lab review", or similar), follow the instructions in [`bloomlab-code-standards/commands/review.md`](commands/review.md).
+When the user asks to run the lab review (`/review`, "structural review", "lab review", or similar), follow the instructions in [`bloomlab-coding-standards/commands/review.md`](commands/review.md).
 
 ## Repository organization
 
@@ -51,7 +51,8 @@ How input data is best organized depends on what it is: a table with one row per
 
 - All generated output goes to `results/`, and can be deleted and regenerated.
 - Ignore `results/` by default in `.gitignore`, then re-include the key scientific outputs — compact, human-readable CSV/TSV/YAML/TXT — so someone can read the main results without running the pipeline. Do not track large or binary regenerable output.
-- Where a lab pipeline ships a reference `.gitignore` (`seqneut-pipeline/test_example/.gitignore`, and the equivalent in other pipelines), that file is the tracking policy for that pipeline's outputs. Copy it verbatim and add the project's own analyses below it. Which of a pipeline's outputs are worth tracking is decided once, in the pipeline, not re-argued per project.
+- `seqneut-pipeline` and `dms-vep-pipeline-3` each ship a reference `.gitignore` at `test_example/.gitignore`, which is the tracking policy for that pipeline's outputs. The `.gitignore` of a project that includes one of them must contain every ignore and re-include pattern from that reference, with the project's own patterns added below. Comments, blank lines, and ordering may differ; the set of patterns may not. A project including both carries the union. Re-check this after updating either submodule, since the reference gains patterns as the pipeline gains outputs.
+- A path tracked because one of those two reference files re-includes it is settled: which of a pipeline's outputs are worth tracking is decided once, in the pipeline, and not re-argued per project.
 - Beyond that, whether an intermediate is tracked is the project's call, made once in `.gitignore` and applied consistently. Some are worth keeping — per-sample counts that record a sequencing run nobody wants to repeat to read. Tracking one deliberately is not a finding; review may note what the choice costs as the project grows, but should not reopen it.
 - The same tracking discipline applies to output of analyses outside the main pipeline.
 - Nothing in `results/` is read as primary input by a later run of the same pipeline.
@@ -71,7 +72,7 @@ How input data is best organized depends on what it is: a table with one row per
 
 ## Code style
 
-- Code must pass `ruff`, `black`, `snakefmt`, and `snakemake --lint` before it is committed. Tool configuration lives in `pyproject.toml`.
+- Code must pass `ruff`, `black`, `snakefmt`, and `snakemake --lint` before it is committed. Tool configuration lives in `pyproject.toml`. This covers the repository's own files; a submodule's are checked in its repository, not here.
 - Scripts are small and single-purpose. Any logic used more than once becomes a named, documented function that is imported — never copy-pasted between scripts or notebooks.
 - The default shape for "add an analysis": new config entry + new Snakemake rule + new small script (or reuse an existing function). Do not grow an existing script with unrelated logic, and do not duplicate a script with small edits.
 - Keep code concise. Prefer simple, readable code over clever code, and do not add abstractions, generality, or dependencies beyond what the task requires.
@@ -93,6 +94,7 @@ How input data is best organized depends on what it is: a table with one row per
 
 - Lab pipelines are included as git submodules. Read the submodule's own `CLAUDE.md` and follow its conventions; a project's `CLAUDE.md` should point at it.
 - Never add project-specific rules or data to a shared submodule.
+- A submodule's own code is linted and reviewed in its own repository, so in a project that includes one, raise nothing about how the submodule's files are written — no style, formatting, lint, length, or documentation findings. What is in scope is a genuine bug, and a change the upstream repository needs in order to function correctly; both belong there as an issue or a pull request, not as a local edit. Adding project-specific rules or data to the submodule, and working around an upstream limitation locally, remain findings — neither is a question of style.
 - Do not recompute or re-plot what an included pipeline already produces; read its outputs.
 - If a lab-maintained package (`seqneut-pipeline`, `dms-vep-pipeline-3`, `neutcurve`, `polyclonal`, `nextstrain-prot-titers-tree`, and similar) does not do exactly what is wanted, propose opening an issue in that repository. Tell the user; do not silently hack around it locally.
 - Keep submodules and conda environments reasonably current with released software versions. Where a version is deliberately held back, say why in a comment.
