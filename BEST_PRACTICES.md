@@ -294,7 +294,7 @@ Each rule declares its inputs, outputs, and parameters; parameters come from the
 ```python
 configfile: "config.yml"
 
-samples = pd.read_csv(config["samples_csv"], dtype=str)
+samples = pd.read_csv(config["samples_csv"], dtype={"sample": str})
 
 rule align:
     input:
@@ -333,6 +333,8 @@ Exploratory work does not need a pipeline. The moment an analysis produces a res
 Our lab has historically suffered from the sprawling Jupyter notebook: analysis v1 copied to v2, cells duplicated and lightly edited, the same plotting code pasted five times with different hardcoded filenames. This was a bad practice when a person wrote every line, and it is even worse practice when AI is writing the lines.
 
 The standard is: any logic used more than once becomes a named function with a docstring. Scripts stay small and single-purpose — one script, one transformation, with explicit inputs and outputs — because small units are what Snakemake composes and what a reviewer can actually understand. Prefer boring, readable code over clever code; in a research setting the reader is usually you, eight months from now, trying to figure out what past-you meant.
+
+Complex (multiline) code, or code that holds key logic, should not be duplicated — put it in a shared function or module instead. But very simple one-line code that has no core logic can be duplicated when that is simpler than introducing a shared function: even where the code for several Altair plots repeats `[alt.Tooltip(c, format=".3g") if df[c].dtype == float else c for c in df.columns]`, keeping it duplicated can be simpler than factoring it out, since a shared function has its own overhead. Reach for a shared function once the duplicated code runs more than a line or two, or encodes a decision that should be made in one place — a QC threshold, a parsing rule, a formula. Judge each case by whether the function makes the project simpler to read as a whole, not by whether the same characters appear twice.
 
 Length is itself a defect. AI assistants write far more code than the problem needs: helper layers nobody calls twice, configurability nobody asked for, defensive branches for cases that cannot arise, more comments than are needed. Ask for the shortest version that is still clear, and delete the rest. Ask Claude Code to periodically make sure it is not being more verbose or complicated than needed.
 
@@ -454,8 +456,8 @@ Keep `README.md` current. Any change that adds, removes, or redirects an analysi
 ## Commits, pull requests, and review
 
 **Try to limit to one conceptual change per commit and per pull request.** This is the most commonly broken rule in the lab, and it makes review difficult. A pull request that adds an analysis, renames some files, fixes an unrelated bug, and reformats a script is harder to review than four separate commits and pull requests.
-However, in real-world bioinformatics analyses sometimes you find a need to refactor some code or fix a bug when adding new data, so some limited combining will happen, but at least try to limit this.
-If you have completed something, make the pull request then, before you then start something conceptually different.
+However, in real-world bioinformatics analyses sometimes you need to refactor code or fix a bug when adding new data, so some combining will happen, but try to limit this as best as reasonable.
+Once you have completed something, make the pull request immediately; do not start something conceptually different on the same branch.
 
 A commit message says what changed and why, and names any workaround the change removes. The best commit messages in the lab's repositories read like short arguments: here is what the file could not express, here is what the code had to do to compensate, here is what both look like now.
 

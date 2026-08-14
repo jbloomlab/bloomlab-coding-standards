@@ -31,7 +31,7 @@ How input data is best organized depends on what it is: a table with one row per
 - **Never reconstruct a recordable fact from results.** A fact that can be recorded — which barcode went into a well, which sample is on which plate — is recorded in the input data, never recovered by analyzing the very results it will then be used to interpret. Otherwise a sample mix-up is laundered into a confirmed label by the analysis meant to catch it.
 - **One current version of a file, not a history of them.** Fix a data file in place and explain the fix in the commit message; git holds the previous version. Do not accumulate `_old`, `_fixed`, or date-suffixed copies of the same file. A deliberately kept pair — a *designed* and an *actual* library — is rare and explained in the README.
 - Where an input is tabular it is plain UTF-8 CSV/TSV, one header row, descriptive column names, and no meaning carried by formatting. Where it is not, the equivalents hold: descriptive names, and nothing meant by position or layout. Missing values are empty fields, not a mixture of `NA`/`-`/`?`/`999`.
-- Read identifiers as strings (`dtype=str` when reading tables). Never let IDs be coerced to numbers.
+- Read identifier columns as strings (`dtype={"sample_name": str}` when reading tables), but only for columns known to be identifiers, not columns that should be numbers (if you aren't sure, ask, don't coerce them to str if they should not be). Never let IDs be coerced to numbers.
 - **Downloaded data records where it came from and when.** For a database download, a file taken from another repository, or an external release, record the source URL or query in a README beside it, and the download date in the filename, the directory name, or a small tracked date file. Re-running the same query later returns different data, so the date is what keeps the analysis interpretable. Where the source allows it, fetching the download in a rule is better than downloading by hand: the URL then lives in `config.yml` and the rule writes a tracked date file. Where the download itself is too large to track, track the date file even though the data is ignored. This applies only to data obtained from an external source: a file the experimenters themselves produced — a plate layout, a bench record, a sample manifest — has no external provenance to cite and needs none.
 - Ask before changing what a data file records.
 
@@ -79,7 +79,7 @@ How input data is best organized depends on what it is: a table with one row per
 ## Code style
 
 - Code must pass `ruff`, `black`, `snakefmt`, and `snakemake --lint` before it is committed. Tool configuration lives in `pyproject.toml`. This covers the repository's own files; a submodule's are checked in its repository, not here.
-- Scripts are small and single-purpose. Any logic used more than once becomes a named, documented function that is imported — never copy-pasted between scripts or notebooks.
+- Scripts are small and single-purpose. Logic used more than once becomes a named, documented function that is imported, rather than being copy-pasted between scripts or notebooks — once that logic is more than a short, simple expression, or encodes a decision that should live in one place. A short expression with no real logic of its own (a one-line tooltip or column-selection expression, say) may stay duplicated where factoring it into a function would cost more than it saves.
 - The default shape for "add an analysis": new config entry + new Snakemake rule + new small script (or reuse an existing function). Do not grow an existing script with unrelated logic, and do not duplicate a script with small edits.
 - Keep code concise. Prefer simple, readable code over clever code, and do not add abstractions, generality, or dependencies beyond what the task requires.
 - Comments explain why, not what the code already says, and are as short as they can be.
@@ -119,7 +119,7 @@ How input data is best organized depends on what it is: a table with one row per
 
 ## Commits and pull requests
 
-- Aim for one conceptual change per commit and per pull request. Some combining is unavoidable in practice; where a change starts accumulating conceptually unrelated edits, say so and propose a split rather than treating the combination as forbidden.
+- Aim for one conceptual change per commit and per pull request. Some combining is unavoidable in practice because sometimes adding new data to an analysis can identify bugs that need to be fixed at the same time. But when a change is fully complete and ready for a pull request, remind the user to make a pull request before adding more conceptually unrelated edits.
 - A commit message says what changed and why, and names any workaround the change removes.
 - All work reaches `main` through a pull request. Call out changes to `config.yml` or `data/` explicitly in the description, since those are the scientifically meaningful diffs.
 - Configure the repository so the default branch cannot be pushed to directly: require a pull request to merge, and block force pushes.
