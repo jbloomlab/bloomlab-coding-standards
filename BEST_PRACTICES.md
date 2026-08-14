@@ -308,7 +308,7 @@ rule align:
         "bwa mem -t {threads} {input.index} {input.r1} {input.r2} | samtools sort -o {output}"
 ```
 
-**Nothing reaches a script except through `input`, `params`, or `wildcards`.** A script that reads a global, reconstructs a path from a convention, or falls back to a default when a param is absent has an undeclared dependency: Snakemake cannot know when to rerun it, and a reviewer cannot see what it depends on. If a rule needs a value, name it in `params`; if it needs a file, name it in `input`.
+**Nothing reaches a script except through `input`, `params`, or `wildcards`.** A script that reads a global, reconstructs a path from a convention, or falls back to a default when a param is absent has an undeclared dependency: Snakemake cannot know when to rerun it, and a reviewer cannot see what it depends on. If a rule needs a value, name it in `params`; if it needs a file, name it in `input`. Inputs should include any custom modules within the pipeline that a script imports, since snakemake tracks code changes to scripts but not to modules they import.
 
 **Run Python through the `script:` directive**, not `shell:` with an argparse wrapper. The script then reads the global `snakemake` object (`snakemake.input.csv`, `snakemake.params.thresholds`, `snakemake.output.csv`, `snakemake.log[0]`), which keeps the interface between rule and script declarative and removes a whole layer of argument plumbing.
 
@@ -320,7 +320,7 @@ sys.stdout = sys.stderr = open(snakemake.log[0], "w")
 
 after which every `print` and every traceback lands in the log. This is what makes a failure diagnosable without re-running it: when a validation raises, the log holds the whole run up to the error, and Snakemake tells you where the log is. Without it, output from parallel jobs interleaves on the terminal and is gone as soon as it scrolls. (`ruff` flags this line as `SIM115`; see the appendix.)
 
-**Rules are glue.** A rule names its inputs and outputs, passes config values through `params`, and delegates the analysis to a script. Analysis logic in a `.smk` file never gets `ruff`'s checks: `snakefmt` will format it and `snakemake --lint` checks the workflow around it, but `ruff` reads only `.py` files and cannot parse Snakemake's rule syntax, so nothing looks for an unused variable, an undefined name, or a bare `except`. It is untestable on its own, too — a script can be exercised against a stub `snakemake` object (see the appendix), a `.smk` file cannot. And it tends to grow.
+**Rules are glue.** A rule names its inputs and outputs, passes config values through `params`, and delegates the analysis to a script. Analysis logic in a `.smk` file never gets `ruff`'s checks: `snakefmt` will format it and `snakemake --lint` checks the workflow around it, but `ruff` reads only `.py` files and cannot parse Snakemake's rule syntax, so nothing looks for an unused variable, an undefined name, or a bare `except`. It is untestable on its own, too — a script can be exercised against a stub `snakemake` object (see the appendix), a `.smk` file cannot. And it tends to grow. This holds for Python that is not analysis too: a long block deriving variables or defining helpers is still code nothing checks. Push what you can into the config or the script that needs it, and where a helper must live at workflow level, put it in a `.smk` file that defines no rules.
 
 **Do not duplicate rules.** Consume an existing rule's output rather than recomputing the same quantity, and add a wildcard to an existing rule rather than copying it into a near-identical one that differs only in a filter or a subset. And do not add a rule or a config key whose only purpose is to switch an analysis off; let the script report that there is nothing to show.
 
@@ -366,7 +366,17 @@ if not bad.empty:
     )
 ```
 
-Concretely: validate inputs at the boundary (start of each script or rule); raise on unexpected values rather than substituting defaults; never use a bare `except:`; make error messages name the file, the column, and the offending values. An informative failure five seconds into a run is a gift. A pipeline that completes on bad input is a liability.
+So missing or unexpected values in configuration or data should raise a clear error message explaining the problem, never a guess at the right value or a reasonable default.
+An informative failure can inform user-guided fixes in the data, configuration, or code.
+A pipeline that silently goes through bad input or data to give wrong answers is the worst possible outcome.
+The error message should name the file, the column, and the offending values, as in the example above.
+
+The checks should be in the part of the pipeline or code that uses the values.
+This might be the script that processes the values, or the library the script calls.
+But do not duplicate checks upstream: if the library already checks the values, don't make the script do it again.
+And if the script already checks the value, especially do not make the snakemake file do it again as we want to keep snakemake files as concise as possible.
+Duplicating checks can also mean that they become obsolete when the ultimate consumer script or library changes its set of allowed values.
+The only exception is that snakemake should check values that are used to build the DAG workflow itself, as those are never checked elsewhere.
 
 **Never guess at defaults or the meaning of incompletely configured experiments** — always raise an error, or say that more information is needed.
 We want the analysis to fail, not pass with incorrectly guessed defaults or configuration.
@@ -469,7 +479,7 @@ A few habits make agentic coding compatible with everything above. Start session
 
 **One namespace.** All included `.smk` files share one global namespace. Prefix helper variables with `_` unless a rule in another file needs to read them.
 
-**Mixed rules and functions.** Defining a helper function alongside rules in the same `.smk` file fails `snakemake --lint` with "Mixed rules and functions in same snakefile". Derive a variable from the config instead, and let a rule index it from a `lambda wc:`.
+**Mixed rules and functions.** Defining a helper function alongside rules in the same `.smk` file fails `snakemake --lint` with "Mixed rules and functions in same snakefile". Either derive a variable from the config and let a rule index it from a `lambda wc:`, or put the helpers in a `.smk` file of their own that defines no rules, included before the rules that call them.
 
 **Testing a rule's script without running the pipeline.** A `script:` rule reads a global `snakemake` object, so its script can be run directly against a stub of one. This exercises the real script rather than a copy, and reaches failure cases the committed data does not contain:
 
