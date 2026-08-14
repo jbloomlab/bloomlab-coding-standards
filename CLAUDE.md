@@ -1,6 +1,6 @@
 # Lab coding standards (master rules)
 
-These rules apply to all lab repositories. Project-level CLAUDE.md files may extend or override them. Rationale and examples: [`bloomlab-coding-standards/BEST_PRACTICES.md`](BEST_PRACTICES.md) (consult only when needed). This file is the normative rule set; if the two documents ever disagree, this file wins.
+These rules apply to all lab repositories. Project-level CLAUDE.md files may extend or override them. Rationale and examples: [`bloomlab-coding-standards/BEST_PRACTICES.md`](BEST_PRACTICES.md) (consult only when needed). This file is the normative rule set; if the two documents ever disagree, this file wins. `BEST_PRACTICES.md` is written by hand for human readers. Claude can propose changes to what it says, but do not restyle its prose.
 
 When the user asks to run the lab review (`/review`, "structural review", "lab review", or similar), follow the instructions in [`bloomlab-coding-standards/commands/review.md`](commands/review.md).
 
@@ -46,7 +46,7 @@ How input data is best organized depends on what it is: a table with one row per
 - Keep configuration as simple as it can be while still conveying what is needed. Do not add a key, a nesting level, or an option that nothing requires; remove keys nothing reads.
 - Where the config genuinely repeats a value or a block across entries, prefer factoring it with a YAML anchor over copy-pasting it. Weigh this against readability: a set of per-experiment entries — one block per plate, run, or batch — that share most fields but differ in a few is legible as written, and each entry reading as a standalone record of one experiment is worth something on its own. Prefer an anchor there, but do not require one. Factor the repetition where it goes past that: blocks identical in every field, a block repeated across unrelated sections of the config, or so many entries that a reader can no longer see which fields actually vary. The lab also uses YTE templating (`__use_yte__: true`) to generate a set of entries from one template; reach for that only when an anchor will not do, since a templated config is harder to read. Deriving the repetition from the data is better than either.
 - YAML is indented two spaces per level, everywhere, including nested mappings.
-- Validate config and input data at the start of a run: required keys/columns present, unique IDs, values in allowed sets, referenced files exist — and, where a unit is a directory of files, that every unit has every file its contract requires. Fail immediately, naming the file, column, and offending values.
+- Config and data should be validated to ensure that they have the correct keys, columns, allowed values etc---and anything incorrect should raise an immediate clear error. But **single source of truth applies to validation checks**: validate values and config in the script that uses them, or in the library the script calls. Duplicating checks done in a script in a snakemake file, or checks done in a module/library in a script, requires recoding allowed values a second time and bloats files that should stay readable. This is about not checking a thing twice, not about checking it less rigorously: the check still happens, and still fails loudly, in whichever place knows what the allowed values are specified and used. Put a check in a `.smk` file only for what the workflow itself must settle before any rule runs, or where an invalid value causes an obscure DAG error.
 - Validation covers structure and references, not the scientific content of an experimental parameter. Check that a key is present, that an identifier is unique, that a referenced file exists. Do not ask code to check that a recorded bench value is the *right* value — that a set of primer indices is the one used, that a dilution series matches the bench, that a plate date is correct. Those are confirmed against the bench record by a human, and a check with nothing to compare against is code that only looks like a safeguard.
 
 ## Results and what is tracked in git
@@ -65,10 +65,13 @@ How input data is best organized depends on what it is: a table with one row per
 ## Snakemake
 
 - Rules may live in `Snakefile` itself or in `.smk` files in `rules/` that it includes; either is fine. Once `Snakefile` grows beyond a few hundred lines, break the rules out into `rules/*.smk`, one file per coherent analysis, each ending by defining the list of final outputs it contributes for `rule all` to collect.
-- A rule is a thin wrapper: explicit `input`, `output`, `params`, and `log`; params sourced from config; the analysis itself delegated to a script. Do not put analysis logic in a `.smk` file.
+- A rule is a thin wrapper: explicit `input`, `output`, `params`, and `log`; params sourced from config; the analysis itself delegated to a script. Do not put analysis logic in a `.smk` file, and do not re-check variables in the `Snakefile` or `.smk` file that are already checked by the script or program being called (see *Configuration*).
+- Try to keep complex Python code in the snakemake files (`Snakefile` and `.smk` files) to a minimum. Sometimes it is necessary to define functions or variables in these files via Python code, but if the code becomes lengthy or complex try to move the logic to the config or implementing script, or failing that move it to a `.smk` file that defines no rules.
 - Everything a script needs arrives through `input`, `params`, or `wildcards` — never through an implicit default, a global, or a path the script reconstructs for itself.
+- If a script imports a custom module living inside the project, snakemake will not know when that module is changed. Therefore, declare it as an `input`, otherwise changes to it will not trigger a rerun.
 - Every rule declares `log:` (`snakemake --lint` checks for it), and everything the rule prints goes there: a `script:` rule's script starts with `sys.stdout = sys.stderr = open(snakemake.log[0], "w")` and prints progress to stdout, and a `shell:` rule redirects into `{log}`. A failed run then leaves the log holding everything up to the error.
 - Run Python through the `script:` directive rather than `shell:`.
+- Limit the use of the `run:` directive to only very simple short code with no dependencies, since `run:` does not enable `conda:` and can bloat snakemake files.
 - Consume an existing rule's output rather than recomputing the same quantity, and add a wildcard to an existing rule rather than copying it into a near-duplicate rule.
 - Do not add a rule or a config key whose only purpose is to switch an analysis off; let the script report that there is nothing to show.
 - Pin environments per rule where used, and dry-run with the same software deployment as a real run.
@@ -112,6 +115,7 @@ How input data is best organized depends on what it is: a table with one row per
 - `CLAUDE.md` documents conventions only. It does not describe the project, individual rules, or configuration keys. Keep it short — no more than a few hundred lines.
 - Describe a thing in exactly one place and cross-reference it from anywhere else that needs it.
 - Keep `README.md` current: any change that adds, removes, or redirects an analysis or a result file updates it in the same change.
+- Where a project has a `CHANGELOG.md`, an entry says succinctly what changed for someone using the project (inputs, outputs, configuration, dependencies, behavior, etc). Leave internal implementation details and how a change was verified to the commit message.
 
 ## Commits and pull requests
 
