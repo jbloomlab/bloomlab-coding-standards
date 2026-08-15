@@ -379,6 +379,7 @@ But do not duplicate checks upstream: if the library already checks the values, 
 And if the script already checks the value, especially do not make the snakemake file do it again as we want to keep snakemake files as concise as possible.
 Duplicating checks can also mean that they become obsolete when the ultimate consumer script or library changes its set of allowed values.
 The only exception is that snakemake should check values that are used to build the DAG workflow itself, as those are never checked elsewhere.
+The admonition against duplicated checks targets formal validation logic; including in your Python code a downstream `assert` restating an already validated point or checking a computation is always an allowed safety check that can often also help document how the code works.
 
 **Never guess at defaults or the meaning of incompletely configured experiments** — always raise an error, or say that more information is needed.
 We want the analysis to fail, not pass with incorrectly guessed defaults or configuration.
