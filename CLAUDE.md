@@ -99,6 +99,7 @@ How input data is best organized depends on what it is: a table with one row per
 ## Submodules, environments, and lab software
 
 - Lab pipelines are included as git submodules. Read the submodule's own `CLAUDE.md` and follow its conventions; a project's `CLAUDE.md` should point at it.
+- Always add, clone, and update submodules recursively: `git submodule add <url>` followed by `git submodule update --init --recursive` (or `git clone --recurse-submodules <url>` for a fresh clone). A lab-pipeline submodule may itself nest `bloomlab-coding-standards`, and a non-recursive init leaves that as an empty directory with no error — silently dropping the imported `CLAUDE.md` rules.
 - Never add project-specific rules or data to a shared submodule.
 - A submodule's own code is linted and reviewed in its own repository, so in a project that includes one, raise nothing about how the submodule's files are written — no style, formatting, lint, length, or documentation findings. What is in scope is a genuine bug, and a change the upstream repository needs in order to function correctly; both belong there as an issue or a pull request, not as a local edit. Adding project-specific rules or data to the submodule, and working around an upstream limitation locally, remain findings — neither is a question of style.
 - Do not recompute or re-plot what an included pipeline already produces; read its outputs.

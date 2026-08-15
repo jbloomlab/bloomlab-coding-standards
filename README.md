@@ -106,7 +106,7 @@ When cloning a project that uses the standards:
 ```bash
 git clone --recurse-submodules <project-url>
 # or, if already cloned:
-git submodule update --init
+git submodule update --init --recursive
 ```
 
 ## Changing the standards
