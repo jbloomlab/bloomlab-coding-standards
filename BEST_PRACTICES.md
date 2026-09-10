@@ -405,11 +405,12 @@ Where a notebook is load-bearing — the pipeline depends on what it produces �
 
 We use Vega-Altair heavily, and it has one property worth knowing: **a chart embeds its entire dataframe in the spec.** The resulting HTML or JSON is as large as the data you hand it, so a chart built from a twenty-column dataframe that plots three of them is many times larger than it needs to be. Big charts are slow to open, awkward to publish, and bloat the repository when tracked.
 
-Three habits keep them small:
+Four habits keep them small and quick:
 
 - **Give the chart only what it draws.** Select the columns and subset the rows before constructing the chart. Filtering in the encoding does not help — the data is embedded either way.
 - **Look up repeated values instead of carrying them.** If the base data is one row per virus/serum pair and each virus also has a collection date, putting `collection_date` on every row repeats it once per serum. Keep a small one-row-per-virus table and join it in with `.transform_lookup`. The saving grows with the number of sera.
 - **Consider `.transform_fold`** where a chart would otherwise carry several wide columns that it plots as a single key/value pair.
+- **Give a constant line one row.** A `datum` encoding fixes where a mark sits, not how many are drawn, so a reference line built from the full frame draws one identical rule per row. Aggregate to a single row first.
 
 This is not premature optimization; the difference is routinely an order of magnitude, and building a chart from a minimal frame is easier than shrinking one later.
 

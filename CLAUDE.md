@@ -95,6 +95,7 @@ How input data is best organized depends on what it is: a table with one row per
 - A Vega-Altair chart embeds its entire dataframe in the spec, so a chart file is as large as the data handed to it. Give the chart only the columns and rows it draws; subset and select before constructing it, not in the encoding.
 - Where a column repeats the same value across every row of a key — per-entity metadata carried on every row of a long measurement table — keep it in a small lookup table and pull it in with `.transform_lookup` rather than repeating it.
 - `.transform_fold` can likewise shrink a chart that would otherwise carry several wide columns it plots as one key/value pair.
+- A mark is drawn once per row of the data behind it, and a `datum` encoding fixes where a mark sits, not how many are drawn — so a constant reference line built from the full frame draws one identical rule per row, which is invisible but makes hover crawl and bloats any SVG exported from it. Reduce the frame to the single row the line needs first, with a `.transform_aggregate` that has no `groupby`.
 
 ## Submodules, environments, and lab software
 
